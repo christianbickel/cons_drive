@@ -72,7 +72,7 @@ export function DriveViewToggle({
         aria-pressed={viewMode === "list"}
         aria-label="Listenansicht"
         className={cn(
-          "inline-flex size-8 items-center justify-center rounded-full transition-colors",
+          "inline-flex size-10 items-center justify-center rounded-full transition-colors touch-manipulation sm:size-8",
           viewMode === "list"
             ? "bg-[#c2e7ff] text-[#001d35]"
             : "text-[#5f6368] hover:bg-black/[0.04]"
@@ -91,7 +91,7 @@ export function DriveViewToggle({
         aria-pressed={viewMode === "thumbs"}
         aria-label="Kachelansicht"
         className={cn(
-          "inline-flex size-8 items-center justify-center rounded-full transition-colors",
+          "inline-flex size-10 items-center justify-center rounded-full transition-colors touch-manipulation sm:size-8",
           viewMode === "thumbs"
             ? "bg-[#c2e7ff] text-[#001d35]"
             : "text-[#5f6368] hover:bg-black/[0.04]"

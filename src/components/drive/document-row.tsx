@@ -46,8 +46,8 @@ export function DocumentRow({ document }: { document: DriveDocument }) {
   return (
     <div
       className={cn(
-        "group grid grid-cols-[minmax(0,1fr)_2.5rem] items-center gap-2 rounded-xl px-2 py-2 transition-colors",
-        "hover:bg-[#e8f0fe]/70 md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.4fr)_minmax(0,1fr)_7.5rem_5.5rem_2.5rem] md:gap-3 md:px-3"
+        "group grid grid-cols-[minmax(0,1fr)_2.5rem] items-center gap-2 rounded-xl px-2 py-2.5 transition-colors",
+        "hover:bg-[#e8f0fe]/70 md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.4fr)_minmax(0,1fr)_7.5rem_5.5rem_2.5rem] md:gap-3 md:px-3 md:py-2"
       )}
     >
       <button

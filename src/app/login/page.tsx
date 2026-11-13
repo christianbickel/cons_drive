@@ -28,8 +28,8 @@ async function LoginContent({
   const lastApiUrl = await getLastApiUrl();
 
   return (
-    <div className="flex h-full min-h-0 flex-1 items-center justify-center bg-[#f8f9fa] px-4 py-16">
-      <div className="w-full max-w-sm space-y-4 rounded-2xl border border-black/5 bg-white p-6 shadow-[0_1px_3px_0_rgba(60,64,67,0.3),0_4px_8px_3px_rgba(60,64,67,0.15)]">
+    <div className="flex h-full min-h-0 flex-1 items-center justify-center bg-[#f8f9fa] px-4 py-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]">
+      <div className="w-full max-w-sm space-y-4 rounded-2xl border border-black/5 bg-white p-5 shadow-[0_1px_3px_0_rgba(60,64,67,0.3),0_4px_8px_3px_rgba(60,64,67,0.15)] sm:p-6">
         <div className="space-y-1">
           <h1 className="text-lg font-semibold tracking-tight text-[#1f1f1f]">
             Consolidate Drive
@@ -56,7 +56,7 @@ export default function LoginPage({
     <div className="flex min-h-0 flex-1 flex-col">
       <Suspense
         fallback={
-          <div className="flex h-full min-h-0 flex-1 items-center justify-center bg-[#f8f9fa] px-4 py-16">
+          <div className="flex h-full min-h-0 flex-1 items-center justify-center bg-[#f8f9fa] px-4 py-[max(2rem,env(safe-area-inset-top))]">
             <div className="h-64 w-full max-w-sm animate-pulse rounded-2xl bg-white/80" />
           </div>
         }

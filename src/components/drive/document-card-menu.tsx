@@ -72,7 +72,7 @@ export function DocumentCardMenu({
       <DropdownMenu onOpenChange={onOpenChange}>
         <DropdownMenuTrigger
           className={cn(
-            "inline-flex size-8 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors",
+            "inline-flex size-10 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors touch-manipulation sm:size-8",
             "hover:bg-black/5 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
             "data-popup-open:bg-black/5 data-popup-open:text-foreground"
           )}

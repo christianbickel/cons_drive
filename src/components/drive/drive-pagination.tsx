@@ -77,24 +77,27 @@ export function DrivePagination({
     children,
     disabled,
     current,
+    label,
   }: {
     target: number;
     children: React.ReactNode;
     disabled?: boolean;
     current?: boolean;
+    label?: string;
   }) {
     return (
       <button
         type="button"
         disabled={disabled || isPending}
         onClick={() => navigate(hrefFor(target))}
+        aria-label={label}
         aria-current={current ? "page" : undefined}
         className={cn(
-          "rounded-md px-2.5 py-1.5 text-sm transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)]",
+          "min-h-10 rounded-md px-3 py-2 text-sm transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)] touch-manipulation sm:min-h-0 sm:px-2.5 sm:py-1.5",
           current
-            ? "min-w-9 bg-foreground text-center text-background tabular-nums"
+            ? "min-w-10 bg-foreground text-center text-background tabular-nums sm:min-w-9"
             : "border border-border/80 hover:bg-muted",
-          !current && "min-w-9 text-center tabular-nums",
+          !current && "min-w-10 text-center tabular-nums sm:min-w-9",
           disabled && "pointer-events-none opacity-40"
         )}
       >
@@ -108,8 +111,13 @@ export function DrivePagination({
       aria-label="Seiten"
       className="flex flex-wrap items-center justify-center gap-1.5 pt-2"
     >
-      <PageButton target={Math.max(1, page - 1)} disabled={page <= 1}>
-        Zurück
+      <PageButton
+        target={Math.max(1, page - 1)}
+        disabled={page <= 1}
+        label="Zurück"
+      >
+        <span className="sm:hidden">‹</span>
+        <span className="hidden sm:inline">Zurück</span>
       </PageButton>
       {withEllipsis.map((item, index) =>
         item === "…" ? (
@@ -128,8 +136,10 @@ export function DrivePagination({
       <PageButton
         target={Math.min(totalPages, page + 1)}
         disabled={page >= totalPages}
+        label="Weiter"
       >
-        Weiter
+        <span className="sm:hidden">›</span>
+        <span className="hidden sm:inline">Weiter</span>
       </PageButton>
     </nav>
   );

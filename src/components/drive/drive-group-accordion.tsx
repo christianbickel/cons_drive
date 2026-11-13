@@ -39,7 +39,7 @@ function GroupSection({
       <section className={cn("space-y-3", depth > 0 && "ml-3 sm:ml-5")}>
         <CollapsibleTrigger
           className={cn(
-            "group/acc flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left outline-none transition-colors",
+            "group/acc flex min-h-11 w-full items-center gap-2 rounded-lg px-1 py-2 text-left outline-none transition-colors touch-manipulation sm:min-h-0 sm:py-1.5",
             "hover:bg-black/[0.03] focus-visible:ring-3 focus-visible:ring-ring/50"
           )}
         >

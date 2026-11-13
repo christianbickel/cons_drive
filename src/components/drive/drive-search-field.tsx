@@ -77,7 +77,7 @@ function fileTypeMenuIcon(type: DriveFileTypeFilter) {
 const DEBOUNCE_MS = 300;
 
 const pillClassName = cn(
-  "inline-flex h-9 items-center gap-1.5 rounded-full bg-[#e9eef6] px-3.5 text-sm text-[#1f1f1f]",
+  "inline-flex min-h-10 items-center gap-1.5 rounded-full bg-[#e9eef6] px-3 text-sm text-[#1f1f1f] touch-manipulation sm:h-9 sm:min-h-0 sm:px-3.5",
   "outline-none transition-[background-color,box-shadow] duration-150 ease-[cubic-bezier(0.2,0,0,1)]",
   "hover:bg-[#e1e7f0] focus-visible:ring-3 focus-visible:ring-ring/50",
   "data-popup-open:bg-white data-popup-open:shadow-[0_1px_3px_0_rgba(60,64,67,0.3),0_4px_8px_3px_rgba(60,64,67,0.15)]"
@@ -104,7 +104,7 @@ function FilterPill({
       {...props}
     >
       <Icon className="size-4 shrink-0 opacity-80" aria-hidden />
-      <span className="max-w-[12rem] truncate">{label}</span>
+      <span className="max-w-[8rem] truncate sm:max-w-[12rem]">{label}</span>
       <ChevronDown className="size-3.5 shrink-0 opacity-70" aria-hidden />
     </DropdownMenuTrigger>
   );
@@ -377,12 +377,12 @@ export function DriveSearchField({
   return (
     <div className={cn("mx-auto w-full max-w-2xl space-y-3", className)}>
       <div
-        className="flex h-12 items-center gap-2 rounded-full bg-[#e9eef6] pr-2 pl-4 transition-[background-color,box-shadow] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-[#e1e7f0] focus-within:bg-white focus-within:shadow-[0_1px_3px_0_rgba(60,64,67,0.3),0_4px_8px_3px_rgba(60,64,67,0.15)]"
+        className="flex flex-col gap-2 rounded-2xl bg-[#e9eef6] p-2 transition-[background-color,box-shadow] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-[#e1e7f0] focus-within:bg-white focus-within:shadow-[0_1px_3px_0_rgba(60,64,67,0.3),0_4px_8px_3px_rgba(60,64,67,0.15)] sm:h-12 sm:flex-row sm:items-center sm:gap-2 sm:rounded-full sm:p-0 sm:pr-2 sm:pl-4"
         role="search"
       >
-        <div className="relative min-w-0 flex-1">
+        <div className="relative min-w-0 flex-1 px-2 sm:px-0">
           <Search
-            className="pointer-events-none absolute top-1/2 left-0 size-5 -translate-y-1/2 text-[#5f6368]"
+            className="pointer-events-none absolute top-1/2 left-2 size-5 -translate-y-1/2 text-[#5f6368] sm:left-0"
             aria-hidden
           />
           <input
@@ -398,23 +398,24 @@ export function DriveSearchField({
             }}
             placeholder={
               selectedScope === "fulltext"
-                ? "Volltextsuche (mehrere Begriffe = UND)"
-                : "Dateiname suchen (mehrere Begriffe = UND)"
+                ? "Volltextsuche…"
+                : "Dateiname suchen…"
             }
             aria-label={
               selectedScope === "fulltext"
                 ? "Volltextsuche, mehrere Begriffe als UND"
                 : "Nach Dateiname filtern, mehrere Begriffe als UND"
             }
-            className="h-10 w-full border-0 bg-transparent pr-1 pl-8 text-[0.95rem] text-[#1f1f1f] outline-none placeholder:text-[#5f6368]"
+            className="h-11 w-full border-0 bg-transparent pr-1 pl-8 text-base text-[#1f1f1f] outline-none placeholder:text-[#5f6368] sm:h-10 sm:text-[0.95rem]"
             autoComplete="off"
+            enterKeyHint="search"
           />
         </div>
 
         <div
           role="group"
           aria-label="Suchmodus"
-          className="flex shrink-0 items-center rounded-full bg-black/[0.06] p-0.5"
+          className="flex w-full shrink-0 items-center rounded-full bg-black/[0.06] p-0.5 sm:w-auto"
         >
           {DRIVE_SEARCH_SCOPE_OPTIONS.map((option) => {
             const active = selectedScope === option.value;
@@ -429,7 +430,7 @@ export function DriveSearchField({
                   navigate({ scope: option.value });
                 }}
                 className={cn(
-                  "rounded-full px-2.5 py-1.5 text-[0.7rem] font-medium whitespace-nowrap transition-colors duration-150",
+                  "min-h-10 flex-1 rounded-full px-2.5 py-1.5 text-[0.7rem] font-medium whitespace-nowrap transition-colors duration-150 touch-manipulation sm:min-h-0 sm:flex-none",
                   active
                     ? "bg-white text-[#001d35] shadow-[0_1px_2px_0_rgba(60,64,67,0.25)]"
                     : "text-[#5f6368] hover:text-[#1f1f1f]"

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -15,6 +15,18 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Consolidate Drive",
   description: "Dokumentenansicht für Consolidate-Tasks",
+  appleWebApp: {
+    capable: true,
+    title: "Consolidate Drive",
+    statusBarStyle: "default",
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#f8f9fa",
 };
 
 export default function RootLayout({

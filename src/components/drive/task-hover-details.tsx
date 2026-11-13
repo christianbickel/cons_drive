@@ -88,10 +88,18 @@ export function TaskHoverDetails({
 }) {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [finePointer, setFinePointer] = useState(false);
 
   useEffect(() => {
     setMounted(true);
+    const media = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const sync = () => setFinePointer(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
   }, []);
+
+  if (!finePointer) return null;
 
   return (
     <>
