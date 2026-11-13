@@ -14,6 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { openConsolidateLink } from "@/lib/consolidate/open-link";
 import type { DriveDocument } from "@/lib/drive/types";
 import { cn } from "@/lib/utils";
 
@@ -82,9 +83,7 @@ export function DocumentCardMenu({
         <DropdownMenuContent align="end" side="bottom" className="min-w-44">
           <DropdownMenuItem
             onClick={() => {
-              if (document.openUrl && document.openUrl !== "#") {
-                window.open(document.openUrl, "_blank", "noopener,noreferrer");
-              }
+              void openConsolidateLink(document.openUrl);
             }}
           >
             <ExternalLink />
@@ -94,7 +93,7 @@ export function DocumentCardMenu({
             disabled={!document.task.url}
             onClick={() => {
               if (document.task.url) {
-                window.open(document.task.url, "_blank", "noopener,noreferrer");
+                void openConsolidateLink(document.task.url);
               }
             }}
           >

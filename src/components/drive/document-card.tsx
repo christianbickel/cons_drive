@@ -2,6 +2,7 @@
 
 import { Mail } from "lucide-react";
 import { useState } from "react";
+import { openConsolidateLink } from "@/lib/consolidate/open-link";
 import type { DriveDocument } from "@/lib/drive/types";
 import { cn } from "@/lib/utils";
 import { DocumentCardMenu } from "./document-card-menu";
@@ -35,9 +36,7 @@ export function DocumentCard({ document }: { document: DriveDocument }) {
   const sizeLabel = formatFileSize(document.size);
 
   const openDocument = () => {
-    if (document.openUrl && document.openUrl !== "#") {
-      window.open(document.openUrl, "_blank", "noopener,noreferrer");
-    }
+    void openConsolidateLink(document.openUrl);
   };
 
   return (

@@ -1,6 +1,7 @@
 "use client";
 
 import { FolderKanban } from "lucide-react";
+import { openConsolidateLink } from "@/lib/consolidate/open-link";
 import type { DriveDocument } from "@/lib/drive/types";
 import { cn } from "@/lib/utils";
 import { DocumentCardMenu } from "./document-card-menu";
@@ -39,9 +40,7 @@ export function DocumentListHeader() {
 
 export function DocumentRow({ document }: { document: DriveDocument }) {
   const openDocument = () => {
-    if (document.openUrl && document.openUrl !== "#") {
-      window.open(document.openUrl, "_blank", "noopener,noreferrer");
-    }
+    void openConsolidateLink(document.openUrl);
   };
 
   return (
