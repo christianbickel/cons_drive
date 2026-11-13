@@ -88,6 +88,13 @@ interface EmailFolderConversationNode {
   conversation: EmailConversationNode;
 }
 
+type FolderConversationsPage = {
+  mailboxFolderConversations: {
+    pageInfo: { hasNextPage: boolean; endCursor?: string | null };
+    nodes: Array<EmailFolderConversationNode | null>;
+  };
+};
+
 interface MailboxFolderNode {
   id: string;
   name?: string | null;
@@ -533,19 +540,20 @@ async function listEmailDriveDocuments(options?: {
 
     while (hasNextPage && scannedConversations < maxConversations) {
       const first = Math.min(pageSize, maxConversations - scannedConversations);
-      const data = await consolidateGraphql<{
-        mailboxFolderConversations: {
-          pageInfo: { hasNextPage: boolean; endCursor?: string | null };
-          nodes: Array<EmailFolderConversationNode | null>;
-        };
-      }>(LIST_MAILBOX_FOLDER_CONVERSATIONS, {
-        folder: folder.id,
-        first,
-        after,
-      });
+      const data: FolderConversationsPage =
+        await consolidateGraphql<FolderConversationsPage>(
+          LIST_MAILBOX_FOLDER_CONVERSATIONS,
+          {
+            folder: folder.id,
+            first,
+            after,
+          }
+        );
 
       const nodes = (data.mailboxFolderConversations.nodes ?? []).filter(
-        (node): node is EmailFolderConversationNode => !!node?.conversation
+        (
+          node: EmailFolderConversationNode | null
+        ): node is EmailFolderConversationNode => !!node?.conversation
       );
       scannedConversations += nodes.length;
 

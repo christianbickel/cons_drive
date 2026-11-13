@@ -101,11 +101,12 @@ export function DocumentCard({ document }: { document: DriveDocument }) {
           {prefix ? <span className="min-w-0 truncate">{prefix}</span> : null}
           {prefix ? <span className="shrink-0" aria-hidden>·</span> : null}
           {document.source === "email" ? (
-            <Mail
-              className="size-3.5 shrink-0 text-[#5f6368]"
-              aria-label="Aus E-Mail"
-              title="Aus E-Mail"
-            />
+            <span title="Aus E-Mail" className="inline-flex shrink-0">
+              <Mail
+                className="size-3.5 text-[#5f6368]"
+                aria-label="Aus E-Mail"
+              />
+            </span>
           ) : null}
           <span className="shrink-0 tabular-nums">{sizeLabel}</span>
         </p>
