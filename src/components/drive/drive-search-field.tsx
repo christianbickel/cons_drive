@@ -1,0 +1,608 @@
+"use client";
+
+import {
+  CalendarDays,
+  ChevronDown,
+  File,
+  FileAudio,
+  FileImage,
+  FileSpreadsheet,
+  FileText,
+  FileType2,
+  FileVideo,
+  Files,
+  FolderKanban,
+  Layers2,
+  Search,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  DRIVE_FILE_TYPE_OPTIONS,
+  DRIVE_MODIFIED_PRESET_OPTIONS,
+  DRIVE_ORIGIN_OPTIONS,
+  DRIVE_SEARCH_SCOPE_OPTIONS,
+  drivePath,
+  isModifiedFilterActive,
+  isOriginFilterActive,
+  isProjectFilterActive,
+  modifiedPresetLabel,
+} from "@/lib/drive/helpers";
+import type {
+  DriveFileTypeFilter,
+  DriveGroupBy,
+  DriveModifiedFilter,
+  DriveModifiedPreset,
+  DriveOriginFilter,
+  DriveProjectFilter,
+  DriveProjectOption,
+  DriveSearchScope,
+  DriveSortBy,
+  DriveViewMode,
+} from "@/lib/drive/types";
+import { cn } from "@/lib/utils";
+import { useDriveNavigation } from "./drive-navigation";
+
+function fileTypeMenuIcon(type: DriveFileTypeFilter) {
+  const className = "size-5 shrink-0";
+  switch (type) {
+    case "Pdf":
+      return <FileText className={cn(className, "text-[#ea4335]")} />;
+    case "Office":
+      return <FileSpreadsheet className={cn(className, "text-[#34a853]")} />;
+    case "Image":
+      return <FileImage className={cn(className, "text-[#ea4335]")} />;
+    case "Video":
+      return <FileVideo className={cn(className, "text-[#a142f4]")} />;
+    case "Audio":
+      return <FileAudio className={cn(className, "text-[#ea4335]")} />;
+    case "Text":
+      return <FileText className={cn(className, "text-[#4285f4]")} />;
+    case "Other":
+      return <File className={cn(className, "text-[#5f6368]")} />;
+    default:
+      return <Files className={cn(className, "text-[#5f6368]")} />;
+  }
+}
+
+const DEBOUNCE_MS = 300;
+
+const pillClassName = cn(
+  "inline-flex h-9 items-center gap-1.5 rounded-full bg-[#e9eef6] px-3.5 text-sm text-[#1f1f1f]",
+  "outline-none transition-[background-color,box-shadow] duration-150 ease-[cubic-bezier(0.2,0,0,1)]",
+  "hover:bg-[#e1e7f0] focus-visible:ring-3 focus-visible:ring-ring/50",
+  "data-popup-open:bg-white data-popup-open:shadow-[0_1px_3px_0_rgba(60,64,67,0.3),0_4px_8px_3px_rgba(60,64,67,0.15)]"
+);
+
+function FilterPill({
+  active,
+  icon: Icon,
+  label,
+  className,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuTrigger> & {
+  active?: boolean;
+  icon: typeof CalendarDays;
+  label: string;
+}) {
+  return (
+    <DropdownMenuTrigger
+      className={cn(
+        pillClassName,
+        active && "bg-[#c2e7ff] hover:bg-[#a8daff]",
+        className
+      )}
+      {...props}
+    >
+      <Icon className="size-4 shrink-0 opacity-80" aria-hidden />
+      <span className="max-w-[12rem] truncate">{label}</span>
+      <ChevronDown className="size-3.5 shrink-0 opacity-70" aria-hidden />
+    </DropdownMenuTrigger>
+  );
+}
+
+export function DriveSearchField({
+  groupBy,
+  sortBy,
+  fileType,
+  project,
+  origin,
+  recentProjects,
+  modified,
+  searchScope,
+  viewMode,
+  pageSize,
+  query,
+  className,
+}: {
+  groupBy: DriveGroupBy;
+  sortBy: DriveSortBy;
+  fileType: DriveFileTypeFilter;
+  project: DriveProjectFilter;
+  origin: DriveOriginFilter;
+  recentProjects: DriveProjectOption[];
+  modified: DriveModifiedFilter;
+  searchScope: DriveSearchScope;
+  viewMode: DriveViewMode;
+  pageSize: number;
+  query: string;
+  className?: string;
+}) {
+  const { navigate: navigateTo, setSearchPending } = useDriveNavigation();
+  const [value, setValue] = useState(query);
+  const [selectedFileType, setSelectedFileType] = useState(fileType);
+  const [selectedProject, setSelectedProject] = useState(project);
+  const [selectedOrigin, setSelectedOrigin] = useState(origin);
+  const [selectedModified, setSelectedModified] = useState(modified);
+  const [selectedScope, setSelectedScope] = useState(searchScope);
+  const [customFrom, setCustomFrom] = useState(modified.from ?? "");
+  const [customTo, setCustomTo] = useState(modified.to ?? "");
+  const debounceRef = useRef<number | null>(null);
+  const queryRef = useRef(query);
+  const pathOptionsRef = useRef({
+    groupBy,
+    sortBy,
+    pageSize,
+    fileType: selectedFileType,
+    project: selectedProject,
+    origin: selectedOrigin,
+    modified: selectedModified,
+    searchScope: selectedScope,
+    viewMode,
+  });
+
+  queryRef.current = query;
+  pathOptionsRef.current = {
+    groupBy,
+    sortBy,
+    pageSize,
+    fileType: selectedFileType,
+    project: selectedProject,
+    origin: selectedOrigin,
+    modified: selectedModified,
+    searchScope: selectedScope,
+    viewMode,
+  };
+
+  useEffect(() => {
+    // Don't overwrite while the user is still typing (debounce active).
+    if (debounceRef.current !== null) return;
+    setValue(query);
+  }, [query]);
+
+  useEffect(() => {
+    setSelectedFileType(fileType);
+  }, [fileType]);
+
+  useEffect(() => {
+    setSelectedProject(project);
+  }, [project]);
+
+  useEffect(() => {
+    setSelectedOrigin(origin);
+  }, [origin]);
+
+  useEffect(() => {
+    setSelectedModified(modified);
+    setCustomFrom(modified.from ?? "");
+    setCustomTo(modified.to ?? "");
+  }, [modified]);
+
+  useEffect(() => {
+    setSelectedScope(searchScope);
+  }, [searchScope]);
+
+  // Clear loading once URL/server props match the optimistic UI
+  // (covers filter-only changes where `query` stays the same).
+  useEffect(() => {
+    if (debounceRef.current !== null) return;
+    const filtersSynced =
+      fileType === selectedFileType &&
+      project === selectedProject &&
+      origin === selectedOrigin &&
+      searchScope === selectedScope &&
+      modified.preset === selectedModified.preset &&
+      (modified.from ?? "") === (selectedModified.from ?? "") &&
+      (modified.to ?? "") === (selectedModified.to ?? "") &&
+      value.trim() === query.trim();
+    if (filtersSynced) {
+      setSearchPending(false);
+    }
+  }, [
+    fileType,
+    project,
+    origin,
+    searchScope,
+    modified,
+    selectedFileType,
+    selectedProject,
+    selectedOrigin,
+    selectedScope,
+    selectedModified,
+    value,
+    query,
+    setSearchPending,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current !== null) {
+        window.clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      setSearchPending(false);
+    };
+  }, [setSearchPending]);
+
+  function clearDebounce() {
+    if (debounceRef.current === null) return;
+    window.clearTimeout(debounceRef.current);
+    debounceRef.current = null;
+  }
+
+  function scheduleSearch(nextValue: string) {
+    clearDebounce();
+    const trimmed = nextValue.trim();
+    const committed = queryRef.current.trim();
+    if (trimmed === committed) {
+      setSearchPending(false);
+      return;
+    }
+
+    setSearchPending(true);
+    debounceRef.current = window.setTimeout(() => {
+      debounceRef.current = null;
+      const options = pathOptionsRef.current;
+      // Hand off to route transition pending.
+      setSearchPending(false);
+      navigateTo(
+        drivePath({
+          groupBy: options.groupBy,
+          sortBy: options.sortBy,
+          page: 1,
+          pageSize: options.pageSize,
+          q: nextValue,
+          type: options.fileType,
+          project: options.project,
+          origin: options.origin,
+          modified: options.modified,
+          scope: options.searchScope,
+          view: options.viewMode,
+        }),
+        { replace: true }
+      );
+    }, DEBOUNCE_MS);
+  }
+
+  function onSearchChange(nextValue: string) {
+    setValue(nextValue);
+    scheduleSearch(nextValue);
+  }
+
+  function navigate(next: {
+    q?: string;
+    type?: DriveFileTypeFilter;
+    project?: DriveProjectFilter;
+    origin?: DriveOriginFilter;
+    modified?: DriveModifiedFilter;
+    scope?: DriveSearchScope;
+  }) {
+    clearDebounce();
+    const nextType = next.type ?? selectedFileType;
+    const nextProject = next.project ?? selectedProject;
+    const nextOrigin = next.origin ?? selectedOrigin;
+    const nextModified = next.modified ?? selectedModified;
+    const nextScope = next.scope ?? selectedScope;
+
+    // Update dropdown UI immediately, then start navigation/search.
+    if (next.type !== undefined) setSelectedFileType(next.type);
+    if (next.project !== undefined) setSelectedProject(next.project);
+    if (next.origin !== undefined) setSelectedOrigin(next.origin);
+    if (next.modified !== undefined) setSelectedModified(next.modified);
+    if (next.scope !== undefined) setSelectedScope(next.scope);
+
+    // Route transition owns the loading state from here.
+    setSearchPending(false);
+    navigateTo(
+      drivePath({
+        groupBy,
+        sortBy,
+        page: 1,
+        pageSize,
+        q: next.q ?? value,
+        type: nextType,
+        project: nextProject,
+        origin: nextOrigin,
+        modified: nextModified,
+        scope: nextScope,
+        view: viewMode,
+      }),
+      { replace: true }
+    );
+  }
+
+  function selectModified(preset: DriveModifiedPreset) {
+    if (preset === "all") {
+      navigate({ modified: { preset: "all" } });
+      return;
+    }
+    if (preset === "custom") return;
+    navigate({ modified: { preset } });
+  }
+
+  function applyCustomRange() {
+    if (!customFrom && !customTo) return;
+    navigate({
+      modified: {
+        preset: "custom",
+        from: customFrom || undefined,
+        to: customTo || undefined,
+      },
+    });
+  }
+
+  const modifiedActive = isModifiedFilterActive(selectedModified);
+  const modifiedLabel = modifiedActive
+    ? selectedModified.preset === "custom"
+      ? [selectedModified.from, selectedModified.to].filter(Boolean).join(" – ") ||
+        "Benutzerdefinierter Zeitraum"
+      : modifiedPresetLabel(selectedModified.preset)
+    : "Geändert";
+
+  const fileTypeLabel =
+    DRIVE_FILE_TYPE_OPTIONS.find((option) => option.value === selectedFileType)
+      ?.label ?? "Typ";
+
+  const projectActive = isProjectFilterActive(selectedProject);
+  const projectLabel = projectActive
+    ? recentProjects.find((option) => option.id === selectedProject)?.name ??
+      "Projekt"
+    : "Projekt";
+
+  const originActive = isOriginFilterActive(selectedOrigin);
+  const originLabel = originActive
+    ? DRIVE_ORIGIN_OPTIONS.find((option) => option.value === selectedOrigin)
+        ?.label ?? "Quelle"
+    : "Quelle";
+
+  return (
+    <div className={cn("mx-auto w-full max-w-2xl space-y-3", className)}>
+      <div
+        className="flex h-12 items-center gap-2 rounded-full bg-[#e9eef6] pr-2 pl-4 transition-[background-color,box-shadow] duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-[#e1e7f0] focus-within:bg-white focus-within:shadow-[0_1px_3px_0_rgba(60,64,67,0.3),0_4px_8px_3px_rgba(60,64,67,0.15)]"
+        role="search"
+      >
+        <div className="relative min-w-0 flex-1">
+          <Search
+            className="pointer-events-none absolute top-1/2 left-0 size-5 -translate-y-1/2 text-[#5f6368]"
+            aria-hidden
+          />
+          <input
+            type="search"
+            value={value}
+            onChange={(event) => onSearchChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              clearDebounce();
+              setSearchPending(false);
+              navigate({ q: value });
+            }}
+            placeholder={
+              selectedScope === "fulltext"
+                ? "Volltextsuche in Consolidate"
+                : "Nach Dateiname suchen"
+            }
+            aria-label={
+              selectedScope === "fulltext"
+                ? "Volltextsuche"
+                : "Nach Dateiname filtern, mehrere Begriffe mit Leerzeichen"
+            }
+            className="h-10 w-full border-0 bg-transparent pr-1 pl-8 text-[0.95rem] text-[#1f1f1f] outline-none placeholder:text-[#5f6368]"
+            autoComplete="off"
+          />
+        </div>
+
+        <div
+          role="group"
+          aria-label="Suchmodus"
+          className="flex shrink-0 items-center rounded-full bg-black/[0.06] p-0.5"
+        >
+          {DRIVE_SEARCH_SCOPE_OPTIONS.map((option) => {
+            const active = selectedScope === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={active}
+                title={option.description}
+                onClick={() => {
+                  if (option.value === selectedScope) return;
+                  navigate({ scope: option.value });
+                }}
+                className={cn(
+                  "rounded-full px-2.5 py-1.5 text-[0.7rem] font-medium whitespace-nowrap transition-colors duration-150",
+                  active
+                    ? "bg-white text-[#001d35] shadow-[0_1px_2px_0_rgba(60,64,67,0.25)]"
+                    : "text-[#5f6368] hover:text-[#1f1f1f]"
+                )}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <DropdownMenu>
+          <FilterPill
+            active={modifiedActive}
+            icon={CalendarDays}
+            label={modifiedLabel}
+            aria-label="Nach Änderungsdatum filtern"
+          />
+          <DropdownMenuContent align="start" className="min-w-56">
+            <DropdownMenuItem
+              onClick={() => selectModified("all")}
+              className={cn(!modifiedActive && "font-medium")}
+            >
+              Beliebiger Zeitpunkt
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {DRIVE_MODIFIED_PRESET_OPTIONS.map((preset) => (
+              <DropdownMenuItem
+                key={preset}
+                onClick={() => selectModified(preset)}
+                className={cn(
+                  selectedModified.preset === preset && "font-medium"
+                )}
+              >
+                {modifiedPresetLabel(preset)}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger
+                className={cn(
+                  selectedModified.preset === "custom" && "font-medium"
+                )}
+              >
+                Benutzerdefinierter Zeitraum
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="min-w-64 p-3">
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor="modified-from"
+                      className="text-xs font-medium text-muted-foreground"
+                    >
+                      Von
+                    </label>
+                    <input
+                      id="modified-from"
+                      type="date"
+                      value={customFrom}
+                      onChange={(event) => setCustomFrom(event.target.value)}
+                      className="h-9 w-full rounded-md border border-border/80 bg-background px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor="modified-to"
+                      className="text-xs font-medium text-muted-foreground"
+                    >
+                      Bis
+                    </label>
+                    <input
+                      id="modified-to"
+                      type="date"
+                      value={customTo}
+                      onChange={(event) => setCustomTo(event.target.value)}
+                      className="h-9 w-full rounded-md border border-border/80 bg-background px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={applyCustomRange}
+                    disabled={!customFrom && !customTo}
+                    className="h-9 w-full rounded-full bg-[#0b57d0] text-sm font-medium text-white transition-opacity disabled:opacity-40"
+                  >
+                    Anwenden
+                  </button>
+                </div>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <FilterPill
+            active={selectedFileType !== "all"}
+            icon={FileType2}
+            label={selectedFileType === "all" ? "Typ" : fileTypeLabel}
+            aria-label="Nach Dateityp filtern"
+          />
+          <DropdownMenuContent align="start" className="min-w-56 p-2">
+            {DRIVE_FILE_TYPE_OPTIONS.map((option) => (
+              <DropdownMenuItem
+                key={option.value}
+                onClick={() => navigate({ type: option.value })}
+                className={cn(
+                  "gap-3 rounded-lg px-2 py-2",
+                  selectedFileType === option.value && "bg-[#e8f0fe] font-medium"
+                )}
+              >
+                {fileTypeMenuIcon(option.value)}
+                <span>{option.label}</span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <FilterPill
+            active={projectActive}
+            icon={FolderKanban}
+            label={projectLabel}
+            aria-label="Nach Projekt filtern"
+          />
+          <DropdownMenuContent align="start" className="min-w-56">
+            <DropdownMenuItem
+              onClick={() => navigate({ project: "all" })}
+              className={cn(!projectActive && "font-medium")}
+            >
+              Alle Projekte
+            </DropdownMenuItem>
+            {recentProjects.length > 0 ? (
+              <>
+                <DropdownMenuSeparator />
+                {recentProjects.map((option) => (
+                  <DropdownMenuItem
+                    key={option.id}
+                    onClick={() => navigate({ project: option.id })}
+                    className={cn(
+                      selectedProject === option.id && "font-medium"
+                    )}
+                  >
+                    <span className="truncate">{option.name}</span>
+                  </DropdownMenuItem>
+                ))}
+              </>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <FilterPill
+            active={originActive}
+            icon={Layers2}
+            label={originLabel}
+            aria-label="Nach Quelle filtern"
+          />
+          <DropdownMenuContent align="start" className="min-w-56">
+            {DRIVE_ORIGIN_OPTIONS.map((option) => (
+              <DropdownMenuItem
+                key={option.value}
+                onClick={() => navigate({ origin: option.value })}
+                className={cn(
+                  selectedOrigin === option.value && "font-medium"
+                )}
+              >
+                {option.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  );
+}
