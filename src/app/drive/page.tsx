@@ -12,6 +12,7 @@ import {
 } from "@/lib/consolidate/drive-repository";
 import { ConsolidateApiError } from "@/lib/consolidate/errors";
 import {
+  drivePath,
   isModifiedFilterActive,
   isOriginFilterActive,
   isProjectFilterActive,
@@ -24,6 +25,7 @@ import {
   parseDriveSortBy,
   parseDriveViewMode,
   prepareDriveDocumentPage,
+  resolveDriveOriginFilter,
 } from "@/lib/drive/helpers";
 
 async function DriveContent({
@@ -55,7 +57,8 @@ async function DriveContent({
   const sortBy = parseDriveSortBy(params.sort);
   const fileType = parseDriveFileType(params.type);
   const project = parseDriveProjectFilter(params.project);
-  const origin = parseDriveOriginFilter(params.origin);
+  const requestedOrigin = parseDriveOriginFilter(params.origin);
+  const origin = resolveDriveOriginFilter(requestedOrigin, project, groupBy);
   const searchScope = parseDriveSearchScope(params.scope);
   const viewMode = parseDriveViewMode(params.view);
   const modified = parseDriveModifiedFilter({
@@ -67,17 +70,33 @@ async function DriveContent({
   const pageSizeRaw = Number.parseInt(params.pageSize ?? "24", 10) || 24;
   const pageSize = Math.min(48, Math.max(12, pageSizeRaw));
   const query = (params.q ?? "").trim();
+
+  if (origin !== requestedOrigin) {
+    redirect(
+      drivePath({
+        groupBy,
+        sortBy,
+        page,
+        pageSize,
+        q: query,
+        type: fileType,
+        project,
+        origin,
+        modified,
+        scope: searchScope,
+        view: viewMode,
+      })
+    );
+  }
+
   const suggested =
     !query &&
     fileType === "all" &&
     !isProjectFilterActive(project) &&
     !isOriginFilterActive(origin) &&
     !isModifiedFilterActive(modified);
-  // E-Mails have no project — skip mailbox scan when filtering/grouping by project.
-  const includeEmails =
-    origin !== "task" &&
-    !isProjectFilterActive(project) &&
-    !groupBy.includes("project");
+  // E-Mails have no project — skip mailbox when origin is task-only.
+  const includeEmails = origin !== "task";
   const includeTasks = origin !== "email";
 
   let allDocuments;

@@ -293,6 +293,23 @@ export function parseDriveOriginFilter(
   return "all";
 }
 
+/** Project filter or any grouping implies task attachments only (emails have no project). */
+export function requiresTaskOnlyOrigin(
+  project: DriveProjectFilter | undefined,
+  groupBy: DriveGroupBy
+): boolean {
+  return isProjectFilterActive(project ?? "all") || groupBy.length > 0;
+}
+
+export function resolveDriveOriginFilter(
+  origin: DriveOriginFilter | undefined,
+  project: DriveProjectFilter | undefined,
+  groupBy: DriveGroupBy
+): DriveOriginFilter {
+  if (requiresTaskOnlyOrigin(project, groupBy)) return "task";
+  return origin ?? "all";
+}
+
 export function isOriginFilterActive(origin: DriveOriginFilter): boolean {
   return origin !== "all";
 }
@@ -608,8 +625,13 @@ export function drivePath(options: {
   if (options.project && options.project !== "all") {
     params.set("project", options.project);
   }
-  if (options.origin && options.origin !== "all") {
-    params.set("origin", options.origin);
+  const origin = resolveDriveOriginFilter(
+    options.origin,
+    options.project,
+    options.groupBy
+  );
+  if (origin !== "all") {
+    params.set("origin", origin);
   }
   if (options.scope && options.scope !== "name") {
     params.set("scope", options.scope);

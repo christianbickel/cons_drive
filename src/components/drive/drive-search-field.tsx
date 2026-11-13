@@ -36,6 +36,7 @@ import {
   isOriginFilterActive,
   isProjectFilterActive,
   modifiedPresetLabel,
+  requiresTaskOnlyOrigin,
 } from "@/lib/drive/helpers";
 import type {
   DriveFileTypeFilter,
@@ -299,14 +300,17 @@ export function DriveSearchField({
     clearDebounce();
     const nextType = next.type ?? selectedFileType;
     const nextProject = next.project ?? selectedProject;
-    const nextOrigin = next.origin ?? selectedOrigin;
     const nextModified = next.modified ?? selectedModified;
     const nextScope = next.scope ?? selectedScope;
+    const originLocked = requiresTaskOnlyOrigin(nextProject, groupBy);
+    const nextOrigin = originLocked
+      ? "task"
+      : (next.origin ?? selectedOrigin);
 
     // Update dropdown UI immediately, then start navigation/search.
     if (next.type !== undefined) setSelectedFileType(next.type);
     if (next.project !== undefined) setSelectedProject(next.project);
-    if (next.origin !== undefined) setSelectedOrigin(next.origin);
+    setSelectedOrigin(nextOrigin);
     if (next.modified !== undefined) setSelectedModified(next.modified);
     if (next.scope !== undefined) setSelectedScope(next.scope);
 
@@ -368,9 +372,11 @@ export function DriveSearchField({
       "Projekt"
     : "Projekt";
 
-  const originActive = isOriginFilterActive(selectedOrigin);
+  const originLocked = requiresTaskOnlyOrigin(selectedProject, groupBy);
+  const effectiveOrigin = originLocked ? "task" : selectedOrigin;
+  const originActive = isOriginFilterActive(effectiveOrigin);
   const originLabel = originActive
-    ? DRIVE_ORIGIN_OPTIONS.find((option) => option.value === selectedOrigin)
+    ? DRIVE_ORIGIN_OPTIONS.find((option) => option.value === effectiveOrigin)
         ?.label ?? "Quelle"
     : "Quelle";
 
@@ -588,14 +594,26 @@ export function DriveSearchField({
             icon={Layers2}
             label={originLabel}
             aria-label="Nach Quelle filtern"
+            title={
+              originLocked
+                ? "Bei Projektfilter oder Gruppierung nur Tasks"
+                : undefined
+            }
           />
           <DropdownMenuContent align="start" className="min-w-56">
+            {originLocked ? (
+              <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                Bei Projektfilter oder Gruppierung sind nur Task-Dokumente
+                verfügbar.
+              </p>
+            ) : null}
             {DRIVE_ORIGIN_OPTIONS.map((option) => (
               <DropdownMenuItem
                 key={option.value}
+                disabled={originLocked && option.value !== "task"}
                 onClick={() => navigate({ origin: option.value })}
                 className={cn(
-                  selectedOrigin === option.value && "font-medium"
+                  effectiveOrigin === option.value && "font-medium"
                 )}
               >
                 {option.label}
