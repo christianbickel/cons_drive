@@ -38,7 +38,9 @@ export async function GET(request: Request) {
     let contentType: string | undefined;
     let name = fallbackName?.trim() || "download";
 
-    if (id) {
+    if (fallbackUrl && isTrustedConsolidateDownloadUrl(auth.apiUrl, fallbackUrl)) {
+      downloadUrl = fallbackUrl;
+    } else if (id) {
       const data = await consolidateGraphql<{
         attachment: {
           id: string;
@@ -63,13 +65,6 @@ export async function GET(request: Request) {
         contentType = data.attachment.contentType ?? undefined;
         name = data.attachment.name || name;
       }
-    }
-
-    if (!downloadUrl && fallbackUrl) {
-      if (!isTrustedConsolidateDownloadUrl(auth.apiUrl, fallbackUrl)) {
-        return new NextResponse("Invalid download URL", { status: 400 });
-      }
-      downloadUrl = fallbackUrl;
     }
 
     if (!downloadUrl) {

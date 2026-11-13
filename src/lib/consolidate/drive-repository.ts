@@ -5,6 +5,7 @@ import type {
   DrivePreviewType,
   DriveProjectOption,
 } from "@/lib/drive/types";
+import { toAndSearchString } from "@/lib/drive/helpers";
 import { getAuthSession } from "@/lib/auth/session";
 import { consolidateGraphql } from "./client";
 import {
@@ -177,8 +178,18 @@ const EMAIL_CONVERSATION_SELECTION = `
 `;
 
 const LIST_TASKS_WITH_ATTACHMENTS = `
-  query DriveTasksWithAttachments($take: Int!, $skip: Int!) {
-    dataEntries_Task(take: $take, skip: $skip) {
+  query DriveTasksWithAttachments(
+    $take: Int!
+    $skip: Int!
+    $order: [IOrderOperationInput!]
+    $filter: [IFilterableInput!]
+  ) {
+    dataEntries_Task(
+      take: $take
+      skip: $skip
+      order: $order
+      filter: $filter
+    ) {
       totalCount
       pageInfo { hasNextPage }
       items {
@@ -209,6 +220,54 @@ const LIST_RECENT_TASKS_WITH_ATTACHMENTS = `
     }
   }
 `;
+
+/** Lean selection for project picker — no download URLs / previews. */
+const PROJECT_TASK_SELECTION = `
+  id
+  values {
+    responsible { id }
+    project { id displayName databaseId }
+  }
+  attachments {
+    id
+    createdBy { id }
+    lastModifiedBy { id }
+  }
+`;
+
+const LIST_RECENT_TASKS_FOR_PROJECTS = `
+  query DriveRecentTasksForProjects(
+    $take: Int!
+    $skip: Int!
+    $order: [IOrderOperationInput!]
+    $filter: [IFilterableInput!]
+  ) {
+    dataEntries_Task(
+      take: $take
+      skip: $skip
+      order: $order
+      filter: $filter
+    ) {
+      pageInfo { hasNextPage }
+      items {
+        ${PROJECT_TASK_SELECTION}
+      }
+    }
+  }
+`;
+
+const HAS_ATTACHMENTS_FILTER = [
+  {
+    metadata: {
+      type: "HasAttachments",
+      operation: { eq: true },
+    },
+  },
+];
+
+const LAST_MODIFIED_DESC = [
+  { metadata: { type: "LastModified", direction: "Descending" } },
+];
 
 const GLOBAL_SEARCH_TASKS_WITH_ATTACHMENTS = `
   query DriveFulltextTasksWithAttachments(
@@ -511,8 +570,8 @@ async function listEmailDriveDocuments(options?: {
   truncated: boolean;
 }> {
   const apiUrl = (await getAuthSession())?.apiUrl;
-  const pageSize = options?.pageSize ?? 50;
-  const maxConversations = options?.maxConversations ?? 500;
+  const pageSize = options?.pageSize ?? 25;
+  const maxConversations = options?.maxConversations ?? 80;
   const documents: DriveDocument[] = [];
   const seenAttachmentIds = new Set<string>();
   let scannedConversations = 0;
@@ -594,14 +653,14 @@ async function searchEmailDriveDocumentsFulltext(options: {
   scannedConversations: number;
   truncated: boolean;
 }> {
-  const searchString = options.searchString.trim();
+  const searchString = toAndSearchString(options.searchString);
   if (!searchString) {
     return { documents: [], scannedConversations: 0, truncated: false };
   }
 
   const apiUrl = (await getAuthSession())?.apiUrl;
-  const pageSize = options.pageSize ?? 50;
-  const maxConversations = options.maxConversations ?? 200;
+  const pageSize = options.pageSize ?? 25;
+  const maxConversations = options.maxConversations ?? 80;
   const documents: DriveDocument[] = [];
   const seenAttachmentIds = new Set<string>();
   let skip = 0;
@@ -661,8 +720,8 @@ async function listSuggestedEmailDriveDocuments(options?: {
 }): Promise<{ documents: DriveDocument[]; scannedConversations: number }> {
   const limit = options?.limit ?? 20;
   const result = await listEmailDriveDocuments({
-    maxConversations: options?.maxConversations ?? 200,
-    pageSize: options?.pageSize ?? 40,
+    maxConversations: options?.maxConversations ?? 40,
+    pageSize: options?.pageSize ?? 20,
   });
 
   const documents = mergeDocuments(result.documents)
@@ -687,8 +746,8 @@ export async function listDriveDocuments(options?: {
   includeTasks?: boolean;
 }): Promise<{ documents: DriveDocument[]; scannedTasks: number; truncated: boolean }> {
   const apiUrl = (await getAuthSession())?.apiUrl;
-  const pageSize = options?.pageSize ?? 100;
-  const maxTasks = options?.maxTasks ?? 2000;
+  const pageSize = options?.pageSize ?? 40;
+  const maxTasks = options?.maxTasks ?? 250;
   const includeEmails = options?.includeEmails !== false;
   const includeTasks = options?.includeTasks !== false;
   const taskDocuments: DriveDocument[] = [];
@@ -698,8 +757,8 @@ export async function listDriveDocuments(options?: {
 
   const emailPromise = includeEmails
     ? listEmailDriveDocuments({
-        maxConversations: options?.maxConversations ?? 500,
-        pageSize: 50,
+        maxConversations: options?.maxConversations ?? 80,
+        pageSize: 25,
       })
     : Promise.resolve({
         documents: [] as DriveDocument[],
@@ -719,6 +778,8 @@ export async function listDriveDocuments(options?: {
       }>(LIST_TASKS_WITH_ATTACHMENTS, {
         take,
         skip,
+        order: LAST_MODIFIED_DESC,
+        filter: HAS_ATTACHMENTS_FILTER,
       });
 
       const items = data.dataEntries_Task.items ?? [];
@@ -770,14 +831,15 @@ export async function searchDriveDocumentsFulltext(options: {
   scannedTasks: number;
   truncated: boolean;
 }> {
-  const searchString = options.searchString.trim();
+  // Space-separated terms → explicit AND (not OR) for Consolidate globalSearch.
+  const searchString = toAndSearchString(options.searchString);
   if (!searchString) {
     return { documents: [], scannedTasks: 0, truncated: false };
   }
 
   const apiUrl = (await getAuthSession())?.apiUrl;
-  const pageSize = options.pageSize ?? 50;
-  const maxTasks = options.maxTasks ?? 200;
+  const pageSize = options.pageSize ?? 25;
+  const maxTasks = options.maxTasks ?? 80;
   const includeEmails = options.includeEmails !== false;
   const includeTasks = options.includeTasks !== false;
   const taskDocuments: DriveDocument[] = [];
@@ -871,31 +933,19 @@ export async function listSuggestedDriveDocuments(options?: {
   }
 
   const limit = options?.limit ?? 20;
-  const pageSize = options?.pageSize ?? 50;
-  const maxTasks = options?.maxTasks ?? 500;
+  const pageSize = options?.pageSize ?? 30;
+  const maxTasks = options?.maxTasks ?? 120;
   const candidates: DriveDocument[] = [];
   let skip = 0;
   let scannedTasks = 0;
 
-  const order = [
-    { metadata: { type: "LastModified", direction: "Descending" } },
-  ];
-  const filter = [
-    {
-      metadata: {
-        type: "HasAttachments",
-        operation: { eq: true },
-      },
-    },
-  ];
-
   const emailPromise = listSuggestedEmailDriveDocuments({
     limit,
-    maxConversations: 200,
-    pageSize: 40,
+    maxConversations: 40,
+    pageSize: 20,
   });
 
-  while (scannedTasks < maxTasks) {
+  while (scannedTasks < maxTasks && candidates.length < limit) {
     const take = Math.min(pageSize, maxTasks - scannedTasks);
     const data = await consolidateGraphql<{
       dataEntries_Task: {
@@ -905,8 +955,8 @@ export async function listSuggestedDriveDocuments(options?: {
     }>(LIST_RECENT_TASKS_WITH_ATTACHMENTS, {
       take,
       skip,
-      order,
-      filter,
+      order: LAST_MODIFIED_DESC,
+      filter: HAS_ATTACHMENTS_FILTER,
     });
 
     const items = data.dataEntries_Task.items ?? [];
@@ -918,9 +968,14 @@ export async function listSuggestedDriveDocuments(options?: {
         if (!isTouchedByUser(attachment, userId)) continue;
         candidates.push(mapTaskDocument(task, attachment, apiUrl));
       }
+      if (candidates.length >= limit) break;
     }
 
-    if (!data.dataEntries_Task.pageInfo.hasNextPage || items.length === 0) {
+    if (
+      candidates.length >= limit ||
+      !data.dataEntries_Task.pageInfo.hasNextPage ||
+      items.length === 0
+    ) {
       break;
     }
     skip += take;
@@ -940,13 +995,6 @@ export async function listSuggestedDriveDocuments(options?: {
   };
 }
 
-function isTaskWorkedByUser(task: TaskNode, userId: string): boolean {
-  if (task.values.responsible?.id === userId) return true;
-  return (task.attachments ?? []).some((attachment) =>
-    isTouchedByUser(attachment, userId)
-  );
-}
-
 /**
  * Up to 20 distinct projects from recent tasks the current user worked on,
  * ordered by Task LastModified (newest first).
@@ -964,37 +1012,40 @@ export async function listRecentDriveProjects(options?: {
   }
 
   const limit = options?.limit ?? 20;
-  const pageSize = options?.pageSize ?? 50;
-  const maxTasks = options?.maxTasks ?? 500;
+  const pageSize = options?.pageSize ?? 40;
+  const maxTasks = options?.maxTasks ?? 150;
   const projects: DriveProjectOption[] = [];
   const seen = new Set<string>();
   let skip = 0;
   let scannedTasks = 0;
-
-  const order = [
-    { metadata: { type: "LastModified", direction: "Descending" } },
-  ];
-  const filter = [
-    {
-      metadata: {
-        type: "HasAttachments",
-        operation: { eq: true },
-      },
-    },
-  ];
 
   while (scannedTasks < maxTasks && projects.length < limit) {
     const take = Math.min(pageSize, maxTasks - scannedTasks);
     const data = await consolidateGraphql<{
       dataEntries_Task: {
         pageInfo: { hasNextPage: boolean };
-        items: TaskNode[];
+        items: Array<{
+          id: string;
+          values: {
+            responsible?: { id: string } | null;
+            project?: {
+              id: string;
+              displayName?: string | null;
+              databaseId?: string | null;
+            } | null;
+          };
+          attachments?: Array<{
+            id: string;
+            createdBy?: { id: string } | null;
+            lastModifiedBy?: { id: string } | null;
+          }> | null;
+        }>;
       };
-    }>(LIST_RECENT_TASKS_WITH_ATTACHMENTS, {
+    }>(LIST_RECENT_TASKS_FOR_PROJECTS, {
       take,
       skip,
-      order,
-      filter,
+      order: LAST_MODIFIED_DESC,
+      filter: HAS_ATTACHMENTS_FILTER,
     });
 
     const items = data.dataEntries_Task.items ?? [];
@@ -1002,7 +1053,14 @@ export async function listRecentDriveProjects(options?: {
 
     for (const task of items) {
       if (projects.length >= limit) break;
-      if (!isTaskWorkedByUser(task, userId)) continue;
+      const touched =
+        task.values.responsible?.id === userId ||
+        (task.attachments ?? []).some(
+          (attachment) =>
+            attachment.createdBy?.id === userId ||
+            attachment.lastModifiedBy?.id === userId
+        );
+      if (!touched) continue;
       const project = task.values.project;
       if (!project?.id || seen.has(project.id)) continue;
       seen.add(project.id);

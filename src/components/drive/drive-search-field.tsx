@@ -398,13 +398,13 @@ export function DriveSearchField({
             }}
             placeholder={
               selectedScope === "fulltext"
-                ? "Volltextsuche in Consolidate"
-                : "Nach Dateiname suchen"
+                ? "Volltextsuche (mehrere Begriffe = UND)"
+                : "Dateiname suchen (mehrere Begriffe = UND)"
             }
             aria-label={
               selectedScope === "fulltext"
-                ? "Volltextsuche"
-                : "Nach Dateiname filtern, mehrere Begriffe mit Leerzeichen"
+                ? "Volltextsuche, mehrere Begriffe als UND"
+                : "Nach Dateiname filtern, mehrere Begriffe als UND"
             }
             className="h-10 w-full border-0 bg-transparent pr-1 pl-8 text-[0.95rem] text-[#1f1f1f] outline-none placeholder:text-[#5f6368]"
             autoComplete="off"

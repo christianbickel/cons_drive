@@ -31,7 +31,11 @@ export async function GET(request: Request) {
     let contentType: string | undefined;
     let previewType: string | undefined;
 
-    if (id) {
+    // Prefer tokenized `u` — skips GraphQL (esp. E-Mail attachments where
+    // root `attachment(id:)` is null).
+    if (fallbackUrl && isTrustedConsolidateDownloadUrl(auth.apiUrl, fallbackUrl)) {
+      downloadUrl = fallbackUrl;
+    } else if (id) {
       const data = await consolidateGraphql<{
         attachment: {
           id: string;
@@ -56,14 +60,6 @@ export async function GET(request: Request) {
         contentType = data.attachment.contentType ?? undefined;
         previewType = data.attachment.previewType ?? undefined;
       }
-    }
-
-    // E-Mail attachments are not resolvable via root `attachment(id:)`.
-    if (!downloadUrl && fallbackUrl) {
-      if (!isTrustedConsolidateDownloadUrl(auth.apiUrl, fallbackUrl)) {
-        return new NextResponse("Invalid download URL", { status: 400 });
-      }
-      downloadUrl = fallbackUrl;
     }
 
     if (!downloadUrl) {

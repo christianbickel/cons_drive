@@ -23,6 +23,7 @@ import {
   parseDriveSearchScope,
   parseDriveSortBy,
   parseDriveViewMode,
+  prepareDriveDocumentPage,
 } from "@/lib/drive/helpers";
 
 async function DriveContent({
@@ -79,7 +80,7 @@ async function DriveContent({
     !groupBy.includes("project");
   const includeTasks = origin !== "email";
 
-  let documents;
+  let allDocuments;
   let recentProjects;
   let truncated = false;
   try {
@@ -96,7 +97,7 @@ async function DriveContent({
         }),
         projectsPromise,
       ]);
-      documents = result.documents;
+      allDocuments = result.documents;
       recentProjects = projectsResult.projects;
     } else if (query && searchScope === "fulltext") {
       const [result, projectsResult] = await Promise.all([
@@ -107,7 +108,7 @@ async function DriveContent({
         }),
         projectsPromise,
       ]);
-      documents = result.documents;
+      allDocuments = result.documents;
       truncated = result.truncated;
       recentProjects = projectsResult.projects;
     } else {
@@ -115,7 +116,7 @@ async function DriveContent({
         listDriveDocuments({ includeEmails, includeTasks }),
         projectsPromise,
       ]);
-      documents = result.documents;
+      allDocuments = result.documents;
       truncated = result.truncated;
       recentProjects = projectsResult.projects;
     }
@@ -141,14 +142,28 @@ async function DriveContent({
     );
   }
 
+  const paged = prepareDriveDocumentPage(allDocuments, {
+    query,
+    searchScope,
+    suggested,
+    fileType,
+    project,
+    origin,
+    modified,
+    sortBy: suggested ? "modified" : sortBy,
+    page: suggested ? 1 : page,
+    pageSize: suggested ? 20 : pageSize,
+  });
+
   return (
     <DriveView
-      documents={documents}
+      documents={paged.items}
+      total={paged.total}
       recentProjects={recentProjects}
       groupBy={suggested ? [] : groupBy}
       sortBy={suggested ? "modified" : sortBy}
-      page={suggested ? 1 : page}
-      pageSize={suggested ? 20 : pageSize}
+      page={paged.page}
+      pageSize={paged.pageSize}
       query={query}
       fileType={fileType}
       project={project}

@@ -421,19 +421,71 @@ export function getModifiedFilterRange(
   };
 }
 
+/**
+ * Split a user query into terms (whitespace-separated).
+ * Quoted phrases stay intact; otherwise each word is its own AND-term.
+ */
+export function parseSearchTerms(query: string): string[] {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+
+  const terms: string[] = [];
+  const tokenPattern = /"([^"]+)"|(\S+)/g;
+  for (const match of trimmed.matchAll(tokenPattern)) {
+    const term = (match[1] ?? match[2] ?? "").trim().toLowerCase();
+    if (term) terms.push(term);
+  }
+  return terms;
+}
+
+/** Build a Consolidate/Elastic-style AND query from space-separated terms. */
+export function toAndSearchString(query: string): string {
+  const trimmed = query.trim();
+  if (!trimmed) return "";
+
+  const parts: string[] = [];
+  const tokenPattern = /"([^"]+)"|(\S+)/g;
+  for (const match of trimmed.matchAll(tokenPattern)) {
+    if (match[1] !== undefined) {
+      parts.push(`"${match[1].trim()}"`);
+      continue;
+    }
+    const raw = (match[2] ?? "").trim();
+    if (!raw) continue;
+    // Keep explicit operators / exclusions as typed.
+    if (/^(AND|OR|NOT)$/i.test(raw) || raw.startsWith("!")) {
+      parts.push(raw);
+      continue;
+    }
+    parts.push(raw);
+  }
+
+  if (parts.length <= 1) return parts[0] ?? trimmed;
+
+  const alreadyAnd = parts.some(
+    (part, index) => index > 0 && /^AND$/i.test(part)
+  );
+  if (alreadyAnd) return parts.join(" ");
+
+  return parts
+    .filter((part) => !/^(AND|OR)$/i.test(part))
+    .join(" AND ");
+}
+
+function documentNameSearchHaystack(doc: DriveDocument): string {
+  return doc.name.toLowerCase();
+}
+
 export function filterDriveDocumentsByName(
   documents: DriveDocument[],
   query: string
 ): DriveDocument[] {
-  const terms = query
-    .trim()
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean);
+  const terms = parseSearchTerms(query);
   if (terms.length === 0) return documents;
   return documents.filter((doc) => {
-    const name = doc.name.toLowerCase();
-    return terms.every((term) => name.includes(term));
+    const haystack = documentNameSearchHaystack(doc);
+    // Every term must match (AND), not any term (OR).
+    return terms.every((term) => haystack.includes(term));
   });
 }
 
@@ -466,6 +518,34 @@ export function filterDriveDocumentsByProject(
 ): DriveDocument[] {
   if (project === "all") return documents;
   return documents.filter((doc) => doc.project?.id === project);
+}
+
+/** Server/client shared pipeline: filter → sort → paginate. */
+export function prepareDriveDocumentPage(
+  documents: DriveDocument[],
+  options: {
+    query: string;
+    searchScope: DriveSearchScope;
+    suggested?: boolean;
+    fileType: DriveFileTypeFilter;
+    project: DriveProjectFilter;
+    origin: DriveOriginFilter;
+    modified: DriveModifiedFilter;
+    sortBy: DriveSortBy;
+    page: number;
+    pageSize: number;
+  }
+) {
+  const named =
+    options.suggested || options.searchScope === "fulltext"
+      ? documents
+      : filterDriveDocumentsByName(documents, options.query);
+  const typed = filterDriveDocumentsByType(named, options.fileType);
+  const byOrigin = filterDriveDocumentsByOrigin(typed, options.origin);
+  const byProject = filterDriveDocumentsByProject(byOrigin, options.project);
+  const filtered = filterDriveDocumentsByModified(byProject, options.modified);
+  const sorted = sortDriveDocuments(filtered, options.sortBy);
+  return paginateDocuments(sorted, options.page, options.pageSize);
 }
 
 export function isModifiedFilterActive(filter: DriveModifiedFilter): boolean {

@@ -1,15 +1,6 @@
 "use client";
 
-import {
-  filterDriveDocumentsByModified,
-  filterDriveDocumentsByName,
-  filterDriveDocumentsByOrigin,
-  filterDriveDocumentsByProject,
-  filterDriveDocumentsByType,
-  groupDriveDocuments,
-  paginateDocuments,
-  sortDriveDocuments,
-} from "@/lib/drive/helpers";
+import { groupDriveDocuments } from "@/lib/drive/helpers";
 import type {
   DriveDocument,
   DriveFileTypeFilter,
@@ -36,6 +27,7 @@ import { DriveViewToggle } from "./drive-view-toggle";
 
 function DriveViewContent({
   documents,
+  total,
   recentProjects,
   groupBy,
   sortBy,
@@ -53,6 +45,7 @@ function DriveViewContent({
   userName,
 }: {
   documents: DriveDocument[];
+  total: number;
   recentProjects: DriveProjectOption[];
   groupBy: DriveGroupBy;
   sortBy: DriveSortBy;
@@ -70,25 +63,17 @@ function DriveViewContent({
   userName?: string;
 }) {
   const { isPending } = useDriveNavigation();
-  const named =
-    suggested || searchScope === "fulltext"
-      ? documents
-      : filterDriveDocumentsByName(documents, query);
-  const typed = filterDriveDocumentsByType(named, fileType);
-  const byOrigin = filterDriveDocumentsByOrigin(typed, origin);
-  const byProject = filterDriveDocumentsByProject(byOrigin, project);
-  const filtered = filterDriveDocumentsByModified(byProject, modified);
-  const sorted = sortDriveDocuments(filtered, sortBy);
-  const paged = paginateDocuments(sorted, page, pageSize);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize) || 1);
+  const currentPage = Math.min(Math.max(1, page), totalPages);
   const groups = suggested
     ? [
         {
           key: "suggested",
           label: "Vorgeschlagene Dokumente",
-          documents: paged.items,
+          documents,
         },
       ]
-    : groupDriveDocuments(paged.items, groupBy);
+    : groupDriveDocuments(documents, groupBy);
 
   return (
     <div className="flex h-full min-h-0 flex-1 bg-[#f8f9fa]">
@@ -102,9 +87,9 @@ function DriveViewContent({
         modified={modified}
         searchScope={searchScope}
         viewMode={viewMode}
-        pageSize={paged.pageSize}
+        pageSize={pageSize}
         query={query}
-        total={paged.total}
+        total={total}
         userName={userName}
       />
 
@@ -124,7 +109,7 @@ function DriveViewContent({
               modified={modified}
               searchScope={searchScope}
               viewMode={viewMode}
-              pageSize={paged.pageSize}
+              pageSize={pageSize}
               query={query}
             />
           </div>
@@ -148,23 +133,22 @@ function DriveViewContent({
                 origin={origin}
                 modified={modified}
                 searchScope={searchScope}
-                pageSize={paged.pageSize}
+                pageSize={pageSize}
                 query={query}
               />
             </div>
             {truncated && !suggested ? (
               <p className="mb-4 text-xs text-amber-700">
-                {searchScope === "fulltext"
-                  ? "Es wurden nur die ersten Treffer aus Tasks und E-Mails geladen. Bitte gib einen exakteren Suchbegriff ein."
-                  : "Es wurden nur die ersten Treffer aus Tasks und E-Mails geladen. Bitte gib einen exakteren Suchbegriff ein."}
+                Es wurden nur die ersten Treffer aus Tasks und E-Mails geladen.
+                Bitte gib einen exakteren Suchbegriff ein.
               </p>
             ) : null}
             <DriveGroupAccordion groups={groups} viewMode={viewMode} />
             {!suggested ? (
               <div className="mt-6">
                 <DrivePagination
-                  page={paged.page}
-                  totalPages={paged.totalPages}
+                  page={currentPage}
+                  totalPages={totalPages}
                   groupBy={groupBy}
                   sortBy={sortBy}
                   fileType={fileType}
@@ -173,7 +157,7 @@ function DriveViewContent({
                   modified={modified}
                   searchScope={searchScope}
                   viewMode={viewMode}
-                  pageSize={paged.pageSize}
+                  pageSize={pageSize}
                   query={query}
                 />
               </div>
