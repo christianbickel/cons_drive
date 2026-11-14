@@ -1212,3 +1212,89 @@ export async function getDriveCompaniesByIds(
 
   return results;
 }
+
+const SEARCH_PROJECTS = `
+  query DriveSearchProjects($searchString: String, $take: Int!) {
+    dataEntries_Project(take: $take, skip: 0, searchString: $searchString) {
+      items {
+        id
+        displayName
+        databaseId
+      }
+    }
+  }
+`;
+
+const GET_PROJECT = `
+  query DriveProjectById($id: ID!) {
+    dataEntry_Project(id: $id) {
+      id
+      displayName
+      databaseId
+    }
+  }
+`;
+
+function mapProjectOption(project: {
+  id: string;
+  displayName?: string | null;
+  databaseId?: string | null;
+}): DriveProjectOption {
+  return {
+    id: project.id,
+    name: project.displayName?.trim() || project.databaseId || "Projekt",
+  };
+}
+
+/** Search Consolidate projects for the Projekt filter dropdown. */
+export async function searchDriveProjects(options: {
+  searchString: string;
+  take?: number;
+}): Promise<DriveProjectOption[]> {
+  const searchString = options.searchString.trim();
+  if (!searchString) return [];
+
+  const data = await consolidateGraphql<{
+    dataEntries_Project: {
+      items: Array<{
+        id: string;
+        displayName?: string | null;
+        databaseId?: string | null;
+      }> | null;
+    } | null;
+  }>(SEARCH_PROJECTS, {
+    searchString,
+    take: options.take ?? 20,
+  });
+
+  return (data.dataEntries_Project?.items ?? []).map(mapProjectOption);
+}
+
+/** Resolve selected project ids to labels for the filter pill. */
+export async function getDriveProjectsByIds(
+  ids: string[]
+): Promise<DriveProjectOption[]> {
+  const unique = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+  if (unique.length === 0) return [];
+
+  const results = await Promise.all(
+    unique.map(async (id) => {
+      try {
+        const data = await consolidateGraphql<{
+          dataEntry_Project: {
+            id: string;
+            displayName?: string | null;
+            databaseId?: string | null;
+          } | null;
+        }>(GET_PROJECT, { id });
+        return data.dataEntry_Project
+          ? mapProjectOption(data.dataEntry_Project)
+          : { id, name: "Projekt" };
+      } catch {
+        return { id, name: "Projekt" };
+      }
+    })
+  );
+
+  return results;
+}

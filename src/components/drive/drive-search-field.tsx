@@ -11,7 +11,6 @@ import {
   FileType2,
   FileVideo,
   Files,
-  FolderKanban,
   Layers2,
   Search,
 } from "lucide-react";
@@ -34,7 +33,6 @@ import {
   drivePath,
   isModifiedFilterActive,
   isOriginFilterActive,
-  isProjectFilterActive,
   modifiedPresetLabel,
   requiresTaskOnlyOrigin,
 } from "@/lib/drive/helpers";
@@ -54,6 +52,7 @@ import type {
 } from "@/lib/drive/types";
 import { cn } from "@/lib/utils";
 import { DriveCompanyFilter as CompanyFilterControl } from "./drive-company-filter";
+import { DriveProjectFilterControl } from "./drive-project-filter";
 import { useDriveNavigation } from "./drive-navigation";
 
 function fileTypeMenuIcon(type: DriveFileTypeFilter) {
@@ -81,7 +80,7 @@ function fileTypeMenuIcon(type: DriveFileTypeFilter) {
 const DEBOUNCE_MS = 300;
 
 const pillClassName = cn(
-  "inline-flex min-h-10 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-[#e9eef6] px-3 text-sm text-[#1f1f1f] touch-manipulation sm:h-9 sm:min-h-0 sm:px-3.5",
+  "inline-flex min-h-10 w-auto max-w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-[#e9eef6] px-3 text-sm text-[#1f1f1f] touch-manipulation sm:h-9 sm:min-h-0 sm:px-3.5",
   "outline-none transition-[background-color,box-shadow] duration-150 ease-[cubic-bezier(0.2,0,0,1)]",
   "hover:bg-[#e1e7f0] focus-visible:ring-3 focus-visible:ring-ring/50",
   "data-popup-open:bg-white data-popup-open:shadow-[0_1px_3px_0_rgba(60,64,67,0.3),0_4px_8px_3px_rgba(60,64,67,0.15)]"
@@ -108,7 +107,9 @@ function FilterPill({
       {...props}
     >
       <Icon className="size-4 shrink-0 opacity-80" aria-hidden />
-      <span className="min-w-0 truncate">{label}</span>
+      <span className="min-w-0 max-w-[10rem] truncate sm:max-w-[14rem]">
+        {label}
+      </span>
       <ChevronDown className="size-3.5 shrink-0 opacity-70" aria-hidden />
     </DropdownMenuTrigger>
   );
@@ -119,6 +120,7 @@ export function DriveSearchField({
   sortBy,
   fileType,
   project,
+  selectedProjects,
   companies,
   selectedCompanies,
   origin,
@@ -134,6 +136,7 @@ export function DriveSearchField({
   sortBy: DriveSortBy;
   fileType: DriveFileTypeFilter;
   project: DriveProjectFilter;
+  selectedProjects: DriveProjectOption[];
   companies: DriveCompanyFilter;
   selectedCompanies: DriveCompanyOption[];
   origin: DriveOriginFilter;
@@ -148,7 +151,9 @@ export function DriveSearchField({
   const { navigate: navigateTo, setSearchPending } = useDriveNavigation();
   const [value, setValue] = useState(query);
   const [selectedFileType, setSelectedFileType] = useState(fileType);
-  const [selectedProject, setSelectedProject] = useState(project);
+  const [selectedProjectOptions, setSelectedProjectOptions] =
+    useState(selectedProjects);
+  const [selectedProjectIds, setSelectedProjectIds] = useState(project);
   const [selectedCompanyOptions, setSelectedCompanyOptions] =
     useState(selectedCompanies);
   const [selectedCompaniesIds, setSelectedCompaniesIds] = useState(companies);
@@ -164,7 +169,7 @@ export function DriveSearchField({
     sortBy,
     pageSize,
     fileType: selectedFileType,
-    project: selectedProject,
+    project: selectedProjectIds,
     companies: selectedCompaniesIds,
     origin: selectedOrigin,
     modified: selectedModified,
@@ -178,7 +183,7 @@ export function DriveSearchField({
     sortBy,
     pageSize,
     fileType: selectedFileType,
-    project: selectedProject,
+    project: selectedProjectIds,
     companies: selectedCompaniesIds,
     origin: selectedOrigin,
     modified: selectedModified,
@@ -197,8 +202,9 @@ export function DriveSearchField({
   }, [fileType]);
 
   useEffect(() => {
-    setSelectedProject(project);
-  }, [project]);
+    setSelectedProjectIds(project);
+    setSelectedProjectOptions(selectedProjects);
+  }, [project, selectedProjects]);
 
   useEffect(() => {
     setSelectedCompaniesIds(companies);
@@ -223,12 +229,15 @@ export function DriveSearchField({
   // (covers filter-only changes where `query` stays the same).
   useEffect(() => {
     if (debounceRef.current !== null) return;
+    const projectsSynced =
+      project.length === selectedProjectIds.length &&
+      project.every((id) => selectedProjectIds.includes(id));
     const companiesSynced =
       companies.length === selectedCompaniesIds.length &&
       companies.every((id) => selectedCompaniesIds.includes(id));
     const filtersSynced =
       fileType === selectedFileType &&
-      project === selectedProject &&
+      projectsSynced &&
       companiesSynced &&
       origin === selectedOrigin &&
       searchScope === selectedScope &&
@@ -247,7 +256,7 @@ export function DriveSearchField({
     searchScope,
     modified,
     selectedFileType,
-    selectedProject,
+    selectedProjectIds,
     selectedCompaniesIds,
     selectedOrigin,
     selectedScope,
@@ -316,7 +325,7 @@ export function DriveSearchField({
   function navigate(next: {
     q?: string;
     type?: DriveFileTypeFilter;
-    project?: DriveProjectFilter;
+    project?: DriveProjectOption[];
     companies?: DriveCompanyOption[];
     origin?: DriveOriginFilter;
     modified?: DriveModifiedFilter;
@@ -324,19 +333,23 @@ export function DriveSearchField({
   }) {
     clearDebounce();
     const nextType = next.type ?? selectedFileType;
-    const nextProject = next.project ?? selectedProject;
+    const nextProjectOptions = next.project ?? selectedProjectOptions;
+    const nextProjects = nextProjectOptions.map((option) => option.id);
     const nextCompanyOptions = next.companies ?? selectedCompanyOptions;
     const nextCompanies = nextCompanyOptions.map((option) => option.id);
     const nextModified = next.modified ?? selectedModified;
     const nextScope = next.scope ?? selectedScope;
-    const originLocked = requiresTaskOnlyOrigin(nextProject, groupBy);
+    const originLocked = requiresTaskOnlyOrigin(nextProjects, groupBy);
     const nextOrigin = originLocked
       ? "task"
       : (next.origin ?? selectedOrigin);
 
     // Update dropdown UI immediately, then start navigation/search.
     if (next.type !== undefined) setSelectedFileType(next.type);
-    if (next.project !== undefined) setSelectedProject(next.project);
+    if (next.project !== undefined) {
+      setSelectedProjectOptions(next.project);
+      setSelectedProjectIds(nextProjects);
+    }
     if (next.companies !== undefined) {
       setSelectedCompanyOptions(next.companies);
       setSelectedCompaniesIds(nextCompanies);
@@ -355,7 +368,7 @@ export function DriveSearchField({
         pageSize,
         q: next.q ?? value,
         type: nextType,
-        project: nextProject,
+        project: nextProjects,
         companies: nextCompanies,
         origin: nextOrigin,
         modified: nextModified,
@@ -398,13 +411,7 @@ export function DriveSearchField({
     DRIVE_FILE_TYPE_OPTIONS.find((option) => option.value === selectedFileType)
       ?.label ?? "Typ";
 
-  const projectActive = isProjectFilterActive(selectedProject);
-  const projectLabel = projectActive
-    ? recentProjects.find((option) => option.id === selectedProject)?.name ??
-      "Projekt"
-    : "Projekt";
-
-  const originLocked = requiresTaskOnlyOrigin(selectedProject, groupBy);
+  const originLocked = requiresTaskOnlyOrigin(selectedProjectIds, groupBy);
   const effectiveOrigin = originLocked ? "task" : selectedOrigin;
   const originActive = isOriginFilterActive(effectiveOrigin);
   const originLabel = originActive
@@ -481,194 +488,158 @@ export function DriveSearchField({
         </div>
       </div>
 
-      <div className="flex w-full flex-wrap items-stretch gap-2 sm:flex-nowrap">
-        <div className="min-w-0 flex-[1_1_calc(50%-0.25rem)] sm:flex-1">
-          <DropdownMenu>
-            <FilterPill
-              active={modifiedActive}
-              icon={CalendarDays}
-              label={modifiedLabel}
-              aria-label="Nach Änderungsdatum filtern"
-            />
-            <DropdownMenuContent align="start" className="min-w-56">
-              <DropdownMenuItem
-                onClick={() => selectModified("all")}
-                className={cn(!modifiedActive && "font-medium")}
-              >
-                Beliebiger Zeitpunkt
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {DRIVE_MODIFIED_PRESET_OPTIONS.map((preset) => (
-                <DropdownMenuItem
-                  key={preset}
-                  onClick={() => selectModified(preset)}
-                  className={cn(
-                    selectedModified.preset === preset && "font-medium"
-                  )}
-                >
-                  {modifiedPresetLabel(preset)}
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger
-                  className={cn(
-                    selectedModified.preset === "custom" && "font-medium"
-                  )}
-                >
-                  Benutzerdefinierter Zeitraum
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="min-w-64 p-3">
-                  <div className="space-y-3">
-                    <div className="space-y-1.5">
-                      <label
-                        htmlFor="modified-from"
-                        className="text-xs font-medium text-muted-foreground"
-                      >
-                        Von
-                      </label>
-                      <input
-                        id="modified-from"
-                        type="date"
-                        value={customFrom}
-                        onChange={(event) => setCustomFrom(event.target.value)}
-                        className="h-9 w-full rounded-md border border-border/80 bg-background px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label
-                        htmlFor="modified-to"
-                        className="text-xs font-medium text-muted-foreground"
-                      >
-                        Bis
-                      </label>
-                      <input
-                        id="modified-to"
-                        type="date"
-                        value={customTo}
-                        onChange={(event) => setCustomTo(event.target.value)}
-                        className="h-9 w-full rounded-md border border-border/80 bg-background px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={applyCustomRange}
-                      disabled={!customFrom && !customTo}
-                      className="h-9 w-full rounded-full bg-[#0b57d0] text-sm font-medium text-white transition-opacity disabled:opacity-40"
-                    >
-                      Anwenden
-                    </button>
-                  </div>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        <div className="min-w-0 flex-[1_1_calc(50%-0.25rem)] sm:flex-1">
-          <DropdownMenu>
-            <FilterPill
-              active={selectedFileType !== "all"}
-              icon={FileType2}
-              label={selectedFileType === "all" ? "Typ" : fileTypeLabel}
-              aria-label="Nach Dateityp filtern"
-            />
-            <DropdownMenuContent align="start" className="min-w-56 p-2">
-              {DRIVE_FILE_TYPE_OPTIONS.map((option) => (
-                <DropdownMenuItem
-                  key={option.value}
-                  onClick={() => navigate({ type: option.value })}
-                  className={cn(
-                    "gap-3 rounded-lg px-2 py-2",
-                    selectedFileType === option.value && "bg-[#e8f0fe] font-medium"
-                  )}
-                >
-                  {fileTypeMenuIcon(option.value)}
-                  <span>{option.label}</span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        <div className="min-w-0 flex-[1_1_calc(50%-0.25rem)] sm:flex-1">
-          <DropdownMenu>
-            <FilterPill
-              active={projectActive}
-              icon={FolderKanban}
-              label={projectLabel}
-              aria-label="Nach Projekt filtern"
-            />
-            <DropdownMenuContent align="start" className="min-w-56">
-              <DropdownMenuItem
-                onClick={() => navigate({ project: "all" })}
-                className={cn(!projectActive && "font-medium")}
-              >
-                Alle Projekte
-              </DropdownMenuItem>
-              {recentProjects.length > 0 ? (
-                <>
-                  <DropdownMenuSeparator />
-                  {recentProjects.map((option) => (
-                    <DropdownMenuItem
-                      key={option.id}
-                      onClick={() => navigate({ project: option.id })}
-                      className={cn(
-                        selectedProject === option.id && "font-medium"
-                      )}
-                    >
-                      <span className="truncate">{option.name}</span>
-                    </DropdownMenuItem>
-                  ))}
-                </>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        <div className="min-w-0 flex-[1_1_calc(50%-0.25rem)] sm:flex-1">
-          <CompanyFilterControl
-            companies={selectedCompaniesIds}
-            selectedCompanies={selectedCompanyOptions}
-            onChange={(next) => navigate({ companies: next })}
+      <div className="flex w-full flex-wrap items-center justify-center gap-2">
+        <DropdownMenu>
+          <FilterPill
+            active={modifiedActive}
+            icon={CalendarDays}
+            label={modifiedLabel}
+            aria-label="Nach Änderungsdatum filtern"
           />
-        </div>
+          <DropdownMenuContent align="start" className="min-w-56">
+            <DropdownMenuItem
+              onClick={() => selectModified("all")}
+              className={cn(!modifiedActive && "font-medium")}
+            >
+              Beliebiger Zeitpunkt
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {DRIVE_MODIFIED_PRESET_OPTIONS.map((preset) => (
+              <DropdownMenuItem
+                key={preset}
+                onClick={() => selectModified(preset)}
+                className={cn(
+                  selectedModified.preset === preset && "font-medium"
+                )}
+              >
+                {modifiedPresetLabel(preset)}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger
+                className={cn(
+                  selectedModified.preset === "custom" && "font-medium"
+                )}
+              >
+                Benutzerdefinierter Zeitraum
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="min-w-64 p-3">
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor="modified-from"
+                      className="text-xs font-medium text-muted-foreground"
+                    >
+                      Von
+                    </label>
+                    <input
+                      id="modified-from"
+                      type="date"
+                      value={customFrom}
+                      onChange={(event) => setCustomFrom(event.target.value)}
+                      className="h-9 w-full rounded-md border border-border/80 bg-background px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor="modified-to"
+                      className="text-xs font-medium text-muted-foreground"
+                    >
+                      Bis
+                    </label>
+                    <input
+                      id="modified-to"
+                      type="date"
+                      value={customTo}
+                      onChange={(event) => setCustomTo(event.target.value)}
+                      className="h-9 w-full rounded-md border border-border/80 bg-background px-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={applyCustomRange}
+                    disabled={!customFrom && !customTo}
+                    className="h-9 w-full rounded-full bg-[#0b57d0] text-sm font-medium text-white transition-opacity disabled:opacity-40"
+                  >
+                    Anwenden
+                  </button>
+                </div>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-        <div className="min-w-0 flex-[1_1_calc(50%-0.25rem)] sm:flex-1">
-          <DropdownMenu>
-            <FilterPill
-              active={originActive}
-              icon={Layers2}
-              label={originLabel}
-              aria-label="Nach Quelle filtern"
-              title={
-                originLocked
-                  ? "Bei Projektfilter oder Gruppierung nur Tasks"
-                  : undefined
-              }
-            />
-            <DropdownMenuContent align="start" className="min-w-56">
-              {originLocked ? (
-                <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                  Bei Projektfilter oder Gruppierung sind nur Task-Dokumente
-                  verfügbar.
-                </p>
-              ) : null}
-              {DRIVE_ORIGIN_OPTIONS.map((option) => (
-                <DropdownMenuItem
-                  key={option.value}
-                  disabled={originLocked && option.value !== "task"}
-                  onClick={() => navigate({ origin: option.value })}
-                  className={cn(
-                    effectiveOrigin === option.value && "font-medium"
-                  )}
-                >
-                  {option.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <DropdownMenu>
+          <FilterPill
+            active={selectedFileType !== "all"}
+            icon={FileType2}
+            label={selectedFileType === "all" ? "Typ" : fileTypeLabel}
+            aria-label="Nach Dateityp filtern"
+          />
+          <DropdownMenuContent align="start" className="min-w-56 p-2">
+            {DRIVE_FILE_TYPE_OPTIONS.map((option) => (
+              <DropdownMenuItem
+                key={option.value}
+                onClick={() => navigate({ type: option.value })}
+                className={cn(
+                  "gap-3 rounded-lg px-2 py-2",
+                  selectedFileType === option.value && "bg-[#e8f0fe] font-medium"
+                )}
+              >
+                {fileTypeMenuIcon(option.value)}
+                <span>{option.label}</span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DriveProjectFilterControl
+          projects={selectedProjectIds}
+          selectedProjects={selectedProjectOptions}
+          recentProjects={recentProjects}
+          onChange={(next) => navigate({ project: next })}
+        />
+
+        <CompanyFilterControl
+          companies={selectedCompaniesIds}
+          selectedCompanies={selectedCompanyOptions}
+          onChange={(next) => navigate({ companies: next })}
+        />
+
+        <DropdownMenu>
+          <FilterPill
+            active={originActive}
+            icon={Layers2}
+            label={originLabel}
+            aria-label="Nach Quelle filtern"
+            title={
+              originLocked
+                ? "Bei Projektfilter oder Gruppierung nur Tasks"
+                : undefined
+            }
+          />
+          <DropdownMenuContent align="start" className="min-w-56">
+            {originLocked ? (
+              <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                Bei Projektfilter oder Gruppierung sind nur Task-Dokumente
+                verfügbar.
+              </p>
+            ) : null}
+            {DRIVE_ORIGIN_OPTIONS.map((option) => (
+              <DropdownMenuItem
+                key={option.value}
+                disabled={originLocked && option.value !== "task"}
+                onClick={() => navigate({ origin: option.value })}
+                className={cn(
+                  effectiveOrigin === option.value && "font-medium"
+                )}
+              >
+                {option.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );

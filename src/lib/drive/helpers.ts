@@ -265,17 +265,20 @@ export function parseDriveFileType(
   return "all";
 }
 
-/** Project id from the URL, or `all` when unset/invalid. */
+/** Project ids from the URL; empty = no project filter. */
 export function parseDriveProjectFilter(
-  raw: string | undefined
+  raw: string | string[] | undefined
 ): DriveProjectFilter {
-  const value = raw?.trim();
-  if (!value || value === "all") return "all";
-  return value;
+  const parts = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  const ids = parts
+    .flatMap((value) => value.split(","))
+    .map((value) => value.trim())
+    .filter((value) => value && value !== "all");
+  return [...new Set(ids)];
 }
 
 export function isProjectFilterActive(project: DriveProjectFilter): boolean {
-  return project !== "all";
+  return project.length > 0;
 }
 
 export function parseDriveCompanyFilter(
@@ -325,7 +328,7 @@ export function requiresTaskOnlyOrigin(
   project: DriveProjectFilter | undefined,
   groupBy: DriveGroupBy
 ): boolean {
-  return isProjectFilterActive(project ?? "all") || groupBy.length > 0;
+  return isProjectFilterActive(project ?? []) || groupBy.length > 0;
 }
 
 export function resolveDriveOriginFilter(
@@ -558,10 +561,13 @@ export function filterDriveDocumentsByModified(
 
 export function filterDriveDocumentsByProject(
   documents: DriveDocument[],
-  project: DriveProjectFilter
+  projects: DriveProjectFilter
 ): DriveDocument[] {
-  if (project === "all") return documents;
-  return documents.filter((doc) => doc.project?.id === project);
+  if (projects.length === 0) return documents;
+  const selected = new Set(projects);
+  return documents.filter(
+    (doc) => doc.project?.id != null && selected.has(doc.project.id)
+  );
 }
 
 /** Server/client shared pipeline: filter → sort → paginate. */
@@ -655,8 +661,8 @@ export function drivePath(options: {
   if (options.type && options.type !== "all") {
     params.set("type", options.type);
   }
-  if (options.project && options.project !== "all") {
-    params.set("project", options.project);
+  for (const projectId of options.project ?? []) {
+    if (projectId) params.append("project", projectId);
   }
   for (const companyId of options.companies ?? []) {
     if (companyId) params.append("company", companyId);

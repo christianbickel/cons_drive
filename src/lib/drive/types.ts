@@ -16,14 +16,14 @@ export type DrivePreviewType =
 /** `all` = no file-type restriction. */
 export type DriveFileTypeFilter = "all" | DrivePreviewType;
 
-/** `all` = no project restriction; otherwise Consolidate project id. */
-export type DriveProjectFilter = "all" | string;
-
-/** Recent project option for the Projekt filter dropdown. */
+/** Recent / selected project option for the Projekt filter. */
 export interface DriveProjectOption {
   id: string;
   name: string;
 }
+
+/** Selected Consolidate project ids; empty = no project restriction. */
+export type DriveProjectFilter = string[];
 
 /** Company option for the Unternehmen multi-select filter. */
 export interface DriveCompanyOption {

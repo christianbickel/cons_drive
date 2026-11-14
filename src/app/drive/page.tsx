@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { getAuthSession } from "@/lib/auth/session";
 import {
   getDriveCompaniesByIds,
+  getDriveProjectsByIds,
   listDriveDocuments,
   listRecentDriveProjects,
   listSuggestedDriveDocuments,
@@ -41,7 +42,7 @@ async function DriveContent({
     pageSize?: string;
     q?: string;
     type?: string;
-    project?: string;
+    project?: string | string[];
     company?: string | string[];
     origin?: string;
     modified?: string;
@@ -108,50 +109,61 @@ async function DriveContent({
 
   let allDocuments;
   let recentProjects;
+  let selectedProjects;
   let selectedCompanies;
   let truncated = false;
   try {
-    const projectsPromise = listRecentDriveProjects({
+    const recentProjectsPromise = listRecentDriveProjects({
       userId: session.user.id,
       limit: 20,
     });
+    const selectedProjectsPromise = getDriveProjectsByIds(project);
     const companiesPromise = getDriveCompaniesByIds(companies);
 
     if (suggested) {
-      const [result, projectsResult, companiesResult] = await Promise.all([
-        listSuggestedDriveDocuments({
-          userId: session.user.id,
-          limit: 20,
-        }),
-        projectsPromise,
-        companiesPromise,
-      ]);
+      const [result, recentResult, selectedResult, companiesResult] =
+        await Promise.all([
+          listSuggestedDriveDocuments({
+            userId: session.user.id,
+            limit: 20,
+          }),
+          recentProjectsPromise,
+          selectedProjectsPromise,
+          companiesPromise,
+        ]);
       allDocuments = result.documents;
-      recentProjects = projectsResult.projects;
+      recentProjects = recentResult.projects;
+      selectedProjects = selectedResult;
       selectedCompanies = companiesResult;
     } else if (query && searchScope === "fulltext") {
-      const [result, projectsResult, companiesResult] = await Promise.all([
-        searchDriveDocumentsFulltext({
-          searchString: query,
-          includeEmails,
-          includeTasks,
-        }),
-        projectsPromise,
-        companiesPromise,
-      ]);
+      const [result, recentResult, selectedResult, companiesResult] =
+        await Promise.all([
+          searchDriveDocumentsFulltext({
+            searchString: query,
+            includeEmails,
+            includeTasks,
+          }),
+          recentProjectsPromise,
+          selectedProjectsPromise,
+          companiesPromise,
+        ]);
       allDocuments = result.documents;
       truncated = result.truncated;
-      recentProjects = projectsResult.projects;
+      recentProjects = recentResult.projects;
+      selectedProjects = selectedResult;
       selectedCompanies = companiesResult;
     } else {
-      const [result, projectsResult, companiesResult] = await Promise.all([
-        listDriveDocuments({ includeEmails, includeTasks }),
-        projectsPromise,
-        companiesPromise,
-      ]);
+      const [result, recentResult, selectedResult, companiesResult] =
+        await Promise.all([
+          listDriveDocuments({ includeEmails, includeTasks }),
+          recentProjectsPromise,
+          selectedProjectsPromise,
+          companiesPromise,
+        ]);
       allDocuments = result.documents;
       truncated = result.truncated;
-      recentProjects = projectsResult.projects;
+      recentProjects = recentResult.projects;
+      selectedProjects = selectedResult;
       selectedCompanies = companiesResult;
     }
   } catch (error) {
@@ -195,6 +207,7 @@ async function DriveContent({
       documents={paged.items}
       total={paged.total}
       recentProjects={recentProjects}
+      selectedProjects={selectedProjects ?? []}
       selectedCompanies={selectedCompanies ?? []}
       groupBy={suggested ? [] : groupBy}
       sortBy={suggested ? "modified" : sortBy}
@@ -225,7 +238,7 @@ export default function DrivePage({
     pageSize?: string;
     q?: string;
     type?: string;
-    project?: string;
+    project?: string | string[];
     company?: string | string[];
     origin?: string;
     modified?: string;

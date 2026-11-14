@@ -33,6 +33,7 @@ function DriveViewContent({
   documents,
   total,
   recentProjects,
+  selectedProjects,
   selectedCompanies,
   groupBy,
   sortBy,
@@ -53,6 +54,7 @@ function DriveViewContent({
   documents: DriveDocument[];
   total: number;
   recentProjects: DriveProjectOption[];
+  selectedProjects: DriveProjectOption[];
   selectedCompanies: DriveCompanyOption[];
   groupBy: DriveGroupBy;
   sortBy: DriveSortBy;
@@ -177,6 +179,7 @@ function DriveViewContent({
               sortBy={sortBy}
               fileType={fileType}
               project={project}
+              selectedProjects={selectedProjects}
               companies={companies}
               selectedCompanies={selectedCompanies}
               origin={origin}
