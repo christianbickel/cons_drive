@@ -3,6 +3,7 @@
 import { Check, LayoutGrid, List } from "lucide-react";
 import { drivePath } from "@/lib/drive/helpers";
 import type {
+  DriveCompanyFilter,
   DriveFileTypeFilter,
   DriveGroupBy,
   DriveModifiedFilter,
@@ -21,6 +22,7 @@ export function DriveViewToggle({
   sortBy,
   fileType,
   project,
+  companies,
   origin,
   modified,
   searchScope,
@@ -32,6 +34,7 @@ export function DriveViewToggle({
   sortBy: DriveSortBy;
   fileType: DriveFileTypeFilter;
   project: DriveProjectFilter;
+  companies: DriveCompanyFilter;
   origin: DriveOriginFilter;
   modified: DriveModifiedFilter;
   searchScope: DriveSearchScope;
@@ -51,6 +54,7 @@ export function DriveViewToggle({
         q: query,
         type: fileType,
         project,
+        companies,
         origin,
         modified,
         scope: searchScope,

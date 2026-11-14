@@ -1,6 +1,7 @@
 import "server-only";
 
 import type {
+  DriveCompanyOption,
   DriveDocument,
   DrivePreviewType,
   DriveProjectOption,
@@ -28,6 +29,17 @@ interface AttachmentNode {
   lastModifiedBy?: { id: string; displayName?: string | null } | null;
 }
 
+interface AssociationEntityNode {
+  __typename?: string;
+  id?: string;
+  displayName?: string | null;
+}
+
+interface AssociationItemNode {
+  entityId?: string | null;
+  entity?: AssociationEntityNode | null;
+}
+
 interface TaskNode {
   id: string;
   displayName: string;
@@ -44,6 +56,7 @@ interface TaskNode {
     project?: { id: string; displayName: string; databaseId?: string | null } | null;
   };
   attachments: AttachmentNode[];
+  associations?: { items?: AssociationItemNode[] | null } | null;
 }
 
 interface EmailConversationTaskNode {
@@ -80,6 +93,7 @@ interface EmailConversationNode {
   lastModified?: string | null;
   emails: EmailNode[];
   tasks: EmailConversationTaskNode[];
+  associations?: { items?: AssociationItemNode[] | null } | null;
 }
 
 interface EmailFolderConversationNode {
@@ -115,6 +129,36 @@ const ATTACHMENT_SELECTION = `
   lastModifiedBy { id displayName }
 `;
 
+/** Consolidate "Relations" — companies linked to Task / E-Mail. */
+const ASSOCIATION_COMPANY_SELECTION = `
+  associations {
+    items {
+      entity {
+        __typename
+        ... on Company { id displayName }
+      }
+    }
+  }
+`;
+
+function companiesFromAssociations(
+  associations: { items?: AssociationItemNode[] | null } | null | undefined
+): Array<{ id: string; name: string }> {
+  const companies: Array<{ id: string; name: string }> = [];
+  const seen = new Set<string>();
+  for (const item of associations?.items ?? []) {
+    const entity = item.entity;
+    if (!entity || entity.__typename !== "Company" || !entity.id) continue;
+    if (seen.has(entity.id)) continue;
+    seen.add(entity.id);
+    companies.push({
+      id: entity.id,
+      name: entity.displayName?.trim() || "Unternehmen",
+    });
+  }
+  return companies;
+}
+
 /** Proxy URLs; include tokenized `u` so E-Mail attachments resolve (root `attachment(id:)` is null). */
 function driveAttachmentProxyUrls(attachment: AttachmentNode): {
   thumbnailUrl: string;
@@ -146,6 +190,7 @@ const TASK_SELECTION = `
   attachments {
     ${ATTACHMENT_SELECTION}
   }
+  ${ASSOCIATION_COMPANY_SELECTION}
 `;
 
 const EMAIL_CONVERSATION_SELECTION = `
@@ -175,6 +220,7 @@ const EMAIL_CONVERSATION_SELECTION = `
       responsible { id displayName }
     }
   }
+  ${ASSOCIATION_COMPANY_SELECTION}
 `;
 
 const LIST_TASKS_WITH_ATTACHMENTS = `
@@ -390,6 +436,7 @@ function mapTaskDocument(
             "Projekt",
         }
       : undefined,
+    companies: companiesFromAssociations(task.associations),
     responsible: task.values.responsible
       ? {
           id: task.values.responsible.id,
@@ -492,6 +539,7 @@ function mapEmailDocument(
       sentAt: sentAt ?? undefined,
     },
     project: projectFromConversation(conversation),
+    companies: companiesFromAssociations(conversation.associations),
     responsible: responsibleFromConversation(conversation),
     taskType: {
       key: "email",
@@ -1077,4 +1125,90 @@ export async function listRecentDriveProjects(options?: {
   }
 
   return { projects, scannedTasks };
+}
+
+const SEARCH_COMPANIES = `
+  query DriveSearchCompanies($searchString: String, $take: Int!) {
+    dataEntries_Company(take: $take, skip: 0, searchString: $searchString) {
+      items {
+        id
+        displayName
+        databaseId
+      }
+    }
+  }
+`;
+
+const GET_COMPANY = `
+  query DriveCompanyById($id: ID!) {
+    dataEntry_Company(id: $id) {
+      id
+      displayName
+      databaseId
+    }
+  }
+`;
+
+function mapCompanyOption(company: {
+  id: string;
+  displayName?: string | null;
+  databaseId?: string | null;
+}): DriveCompanyOption {
+  return {
+    id: company.id,
+    name: company.displayName?.trim() || company.databaseId || "Unternehmen",
+  };
+}
+
+/** Search Consolidate companies for the Unternehmen filter dropdown. */
+export async function searchDriveCompanies(options: {
+  searchString: string;
+  take?: number;
+}): Promise<DriveCompanyOption[]> {
+  const searchString = options.searchString.trim();
+  if (!searchString) return [];
+
+  const data = await consolidateGraphql<{
+    dataEntries_Company: {
+      items: Array<{
+        id: string;
+        displayName?: string | null;
+        databaseId?: string | null;
+      }>;
+    };
+  }>(SEARCH_COMPANIES, {
+    searchString,
+    take: options.take ?? 20,
+  });
+
+  return (data.dataEntries_Company.items ?? []).map(mapCompanyOption);
+}
+
+/** Resolve selected company ids to labels for the filter pill. */
+export async function getDriveCompaniesByIds(
+  ids: string[]
+): Promise<DriveCompanyOption[]> {
+  const unique = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+  if (unique.length === 0) return [];
+
+  const results = await Promise.all(
+    unique.map(async (id) => {
+      try {
+        const data = await consolidateGraphql<{
+          dataEntry_Company: {
+            id: string;
+            displayName?: string | null;
+            databaseId?: string | null;
+          } | null;
+        }>(GET_COMPANY, { id });
+        return data.dataEntry_Company
+          ? mapCompanyOption(data.dataEntry_Company)
+          : { id, name: "Unternehmen" };
+      } catch {
+        return { id, name: "Unternehmen" };
+      }
+    })
+  );
+
+  return results;
 }

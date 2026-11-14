@@ -39,6 +39,8 @@ import {
   requiresTaskOnlyOrigin,
 } from "@/lib/drive/helpers";
 import type {
+  DriveCompanyFilter,
+  DriveCompanyOption,
   DriveFileTypeFilter,
   DriveGroupBy,
   DriveModifiedFilter,
@@ -51,6 +53,7 @@ import type {
   DriveViewMode,
 } from "@/lib/drive/types";
 import { cn } from "@/lib/utils";
+import { DriveCompanyFilter as CompanyFilterControl } from "./drive-company-filter";
 import { useDriveNavigation } from "./drive-navigation";
 
 function fileTypeMenuIcon(type: DriveFileTypeFilter) {
@@ -116,6 +119,8 @@ export function DriveSearchField({
   sortBy,
   fileType,
   project,
+  companies,
+  selectedCompanies,
   origin,
   recentProjects,
   modified,
@@ -129,6 +134,8 @@ export function DriveSearchField({
   sortBy: DriveSortBy;
   fileType: DriveFileTypeFilter;
   project: DriveProjectFilter;
+  companies: DriveCompanyFilter;
+  selectedCompanies: DriveCompanyOption[];
   origin: DriveOriginFilter;
   recentProjects: DriveProjectOption[];
   modified: DriveModifiedFilter;
@@ -142,6 +149,9 @@ export function DriveSearchField({
   const [value, setValue] = useState(query);
   const [selectedFileType, setSelectedFileType] = useState(fileType);
   const [selectedProject, setSelectedProject] = useState(project);
+  const [selectedCompanyOptions, setSelectedCompanyOptions] =
+    useState(selectedCompanies);
+  const [selectedCompaniesIds, setSelectedCompaniesIds] = useState(companies);
   const [selectedOrigin, setSelectedOrigin] = useState(origin);
   const [selectedModified, setSelectedModified] = useState(modified);
   const [selectedScope, setSelectedScope] = useState(searchScope);
@@ -155,6 +165,7 @@ export function DriveSearchField({
     pageSize,
     fileType: selectedFileType,
     project: selectedProject,
+    companies: selectedCompaniesIds,
     origin: selectedOrigin,
     modified: selectedModified,
     searchScope: selectedScope,
@@ -168,6 +179,7 @@ export function DriveSearchField({
     pageSize,
     fileType: selectedFileType,
     project: selectedProject,
+    companies: selectedCompaniesIds,
     origin: selectedOrigin,
     modified: selectedModified,
     searchScope: selectedScope,
@@ -189,6 +201,11 @@ export function DriveSearchField({
   }, [project]);
 
   useEffect(() => {
+    setSelectedCompaniesIds(companies);
+    setSelectedCompanyOptions(selectedCompanies);
+  }, [companies, selectedCompanies]);
+
+  useEffect(() => {
     setSelectedOrigin(origin);
   }, [origin]);
 
@@ -206,9 +223,13 @@ export function DriveSearchField({
   // (covers filter-only changes where `query` stays the same).
   useEffect(() => {
     if (debounceRef.current !== null) return;
+    const companiesSynced =
+      companies.length === selectedCompaniesIds.length &&
+      companies.every((id) => selectedCompaniesIds.includes(id));
     const filtersSynced =
       fileType === selectedFileType &&
       project === selectedProject &&
+      companiesSynced &&
       origin === selectedOrigin &&
       searchScope === selectedScope &&
       modified.preset === selectedModified.preset &&
@@ -221,11 +242,13 @@ export function DriveSearchField({
   }, [
     fileType,
     project,
+    companies,
     origin,
     searchScope,
     modified,
     selectedFileType,
     selectedProject,
+    selectedCompaniesIds,
     selectedOrigin,
     selectedScope,
     selectedModified,
@@ -274,6 +297,7 @@ export function DriveSearchField({
           q: nextValue,
           type: options.fileType,
           project: options.project,
+          companies: options.companies,
           origin: options.origin,
           modified: options.modified,
           scope: options.searchScope,
@@ -293,6 +317,7 @@ export function DriveSearchField({
     q?: string;
     type?: DriveFileTypeFilter;
     project?: DriveProjectFilter;
+    companies?: DriveCompanyOption[];
     origin?: DriveOriginFilter;
     modified?: DriveModifiedFilter;
     scope?: DriveSearchScope;
@@ -300,6 +325,8 @@ export function DriveSearchField({
     clearDebounce();
     const nextType = next.type ?? selectedFileType;
     const nextProject = next.project ?? selectedProject;
+    const nextCompanyOptions = next.companies ?? selectedCompanyOptions;
+    const nextCompanies = nextCompanyOptions.map((option) => option.id);
     const nextModified = next.modified ?? selectedModified;
     const nextScope = next.scope ?? selectedScope;
     const originLocked = requiresTaskOnlyOrigin(nextProject, groupBy);
@@ -310,6 +337,10 @@ export function DriveSearchField({
     // Update dropdown UI immediately, then start navigation/search.
     if (next.type !== undefined) setSelectedFileType(next.type);
     if (next.project !== undefined) setSelectedProject(next.project);
+    if (next.companies !== undefined) {
+      setSelectedCompanyOptions(next.companies);
+      setSelectedCompaniesIds(nextCompanies);
+    }
     setSelectedOrigin(nextOrigin);
     if (next.modified !== undefined) setSelectedModified(next.modified);
     if (next.scope !== undefined) setSelectedScope(next.scope);
@@ -325,6 +356,7 @@ export function DriveSearchField({
         q: next.q ?? value,
         type: nextType,
         project: nextProject,
+        companies: nextCompanies,
         origin: nextOrigin,
         modified: nextModified,
         scope: nextScope,
@@ -587,6 +619,12 @@ export function DriveSearchField({
             ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <CompanyFilterControl
+          companies={selectedCompaniesIds}
+          selectedCompanies={selectedCompanyOptions}
+          onChange={(next) => navigate({ companies: next })}
+        />
 
         <DropdownMenu>
           <FilterPill

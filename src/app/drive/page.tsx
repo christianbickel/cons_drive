@@ -5,6 +5,7 @@ import { DriveView } from "@/components/drive/drive-view";
 import { Button } from "@/components/ui/button";
 import { getAuthSession } from "@/lib/auth/session";
 import {
+  getDriveCompaniesByIds,
   listDriveDocuments,
   listRecentDriveProjects,
   listSuggestedDriveDocuments,
@@ -13,9 +14,11 @@ import {
 import { ConsolidateApiError } from "@/lib/consolidate/errors";
 import {
   drivePath,
+  isCompanyFilterActive,
   isModifiedFilterActive,
   isOriginFilterActive,
   isProjectFilterActive,
+  parseDriveCompanyFilter,
   parseDriveFileType,
   parseDriveGroupBy,
   parseDriveModifiedFilter,
@@ -39,6 +42,7 @@ async function DriveContent({
     q?: string;
     type?: string;
     project?: string;
+    company?: string | string[];
     origin?: string;
     modified?: string;
     from?: string;
@@ -57,6 +61,7 @@ async function DriveContent({
   const sortBy = parseDriveSortBy(params.sort);
   const fileType = parseDriveFileType(params.type);
   const project = parseDriveProjectFilter(params.project);
+  const companies = parseDriveCompanyFilter(params.company);
   const requestedOrigin = parseDriveOriginFilter(params.origin);
   const origin = resolveDriveOriginFilter(requestedOrigin, project, groupBy);
   const searchScope = parseDriveSearchScope(params.scope);
@@ -81,6 +86,7 @@ async function DriveContent({
         q: query,
         type: fileType,
         project,
+        companies,
         origin,
         modified,
         scope: searchScope,
@@ -93,6 +99,7 @@ async function DriveContent({
     !query &&
     fileType === "all" &&
     !isProjectFilterActive(project) &&
+    !isCompanyFilterActive(companies) &&
     !isOriginFilterActive(origin) &&
     !isModifiedFilterActive(modified);
   // E-Mails have no project — skip mailbox when origin is task-only.
@@ -101,43 +108,51 @@ async function DriveContent({
 
   let allDocuments;
   let recentProjects;
+  let selectedCompanies;
   let truncated = false;
   try {
     const projectsPromise = listRecentDriveProjects({
       userId: session.user.id,
       limit: 20,
     });
+    const companiesPromise = getDriveCompaniesByIds(companies);
 
     if (suggested) {
-      const [result, projectsResult] = await Promise.all([
+      const [result, projectsResult, companiesResult] = await Promise.all([
         listSuggestedDriveDocuments({
           userId: session.user.id,
           limit: 20,
         }),
         projectsPromise,
+        companiesPromise,
       ]);
       allDocuments = result.documents;
       recentProjects = projectsResult.projects;
+      selectedCompanies = companiesResult;
     } else if (query && searchScope === "fulltext") {
-      const [result, projectsResult] = await Promise.all([
+      const [result, projectsResult, companiesResult] = await Promise.all([
         searchDriveDocumentsFulltext({
           searchString: query,
           includeEmails,
           includeTasks,
         }),
         projectsPromise,
+        companiesPromise,
       ]);
       allDocuments = result.documents;
       truncated = result.truncated;
       recentProjects = projectsResult.projects;
+      selectedCompanies = companiesResult;
     } else {
-      const [result, projectsResult] = await Promise.all([
+      const [result, projectsResult, companiesResult] = await Promise.all([
         listDriveDocuments({ includeEmails, includeTasks }),
         projectsPromise,
+        companiesPromise,
       ]);
       allDocuments = result.documents;
       truncated = result.truncated;
       recentProjects = projectsResult.projects;
+      selectedCompanies = companiesResult;
     }
   } catch (error) {
     const message =
@@ -167,6 +182,7 @@ async function DriveContent({
     suggested,
     fileType,
     project,
+    companies,
     origin,
     modified,
     sortBy: suggested ? "modified" : sortBy,
@@ -179,6 +195,7 @@ async function DriveContent({
       documents={paged.items}
       total={paged.total}
       recentProjects={recentProjects}
+      selectedCompanies={selectedCompanies ?? []}
       groupBy={suggested ? [] : groupBy}
       sortBy={suggested ? "modified" : sortBy}
       page={paged.page}
@@ -186,6 +203,7 @@ async function DriveContent({
       query={query}
       fileType={fileType}
       project={project}
+      companies={companies}
       origin={origin}
       modified={modified}
       searchScope={searchScope}
@@ -208,6 +226,7 @@ export default function DrivePage({
     q?: string;
     type?: string;
     project?: string;
+    company?: string | string[];
     origin?: string;
     modified?: string;
     from?: string;

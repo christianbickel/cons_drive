@@ -1,4 +1,5 @@
 import type {
+  DriveCompanyFilter,
   DriveDocument,
   DriveDocumentGroup,
   DriveFileTypeFilter,
@@ -277,6 +278,32 @@ export function isProjectFilterActive(project: DriveProjectFilter): boolean {
   return project !== "all";
 }
 
+export function parseDriveCompanyFilter(
+  raw: string | string[] | undefined
+): DriveCompanyFilter {
+  const parts = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  const ids = parts
+    .flatMap((value) => value.split(","))
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return [...new Set(ids)];
+}
+
+export function isCompanyFilterActive(companies: DriveCompanyFilter): boolean {
+  return companies.length > 0;
+}
+
+export function filterDriveDocumentsByCompany(
+  documents: DriveDocument[],
+  companies: DriveCompanyFilter
+): DriveDocument[] {
+  if (companies.length === 0) return documents;
+  const selected = new Set(companies);
+  return documents.filter((doc) =>
+    (doc.companies ?? []).some((company) => selected.has(company.id))
+  );
+}
+
 export const DRIVE_ORIGIN_OPTIONS: Array<{
   value: DriveOriginFilter;
   label: string;
@@ -546,6 +573,7 @@ export function prepareDriveDocumentPage(
     suggested?: boolean;
     fileType: DriveFileTypeFilter;
     project: DriveProjectFilter;
+    companies?: DriveCompanyFilter;
     origin: DriveOriginFilter;
     modified: DriveModifiedFilter;
     sortBy: DriveSortBy;
@@ -560,7 +588,11 @@ export function prepareDriveDocumentPage(
   const typed = filterDriveDocumentsByType(named, options.fileType);
   const byOrigin = filterDriveDocumentsByOrigin(typed, options.origin);
   const byProject = filterDriveDocumentsByProject(byOrigin, options.project);
-  const filtered = filterDriveDocumentsByModified(byProject, options.modified);
+  const byCompany = filterDriveDocumentsByCompany(
+    byProject,
+    options.companies ?? []
+  );
+  const filtered = filterDriveDocumentsByModified(byCompany, options.modified);
   const sorted = sortDriveDocuments(filtered, options.sortBy);
   return paginateDocuments(sorted, options.page, options.pageSize);
 }
@@ -607,6 +639,7 @@ export function drivePath(options: {
   q?: string;
   type?: DriveFileTypeFilter;
   project?: DriveProjectFilter;
+  companies?: DriveCompanyFilter;
   origin?: DriveOriginFilter;
   modified?: DriveModifiedFilter;
   scope?: DriveSearchScope;
@@ -624,6 +657,9 @@ export function drivePath(options: {
   }
   if (options.project && options.project !== "all") {
     params.set("project", options.project);
+  }
+  for (const companyId of options.companies ?? []) {
+    if (companyId) params.append("company", companyId);
   }
   const origin = resolveDriveOriginFilter(
     options.origin,

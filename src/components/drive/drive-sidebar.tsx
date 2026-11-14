@@ -22,6 +22,7 @@ import {
   toggleDriveGroupField,
 } from "@/lib/drive/helpers";
 import type {
+  DriveCompanyFilter,
   DriveFileTypeFilter,
   DriveGroupBy,
   DriveGroupField,
@@ -110,6 +111,7 @@ function SidebarBody({
   sortBy: DriveSortBy;
   fileType: DriveFileTypeFilter;
   project: DriveProjectFilter;
+  companies: DriveCompanyFilter;
   origin: DriveOriginFilter;
   modified: DriveModifiedFilter;
   searchScope: DriveSearchScope;
@@ -227,6 +229,7 @@ export function DriveSidebar({
   sortBy,
   fileType,
   project,
+  companies,
   origin,
   modified,
   searchScope,
@@ -242,6 +245,7 @@ export function DriveSidebar({
   sortBy: DriveSortBy;
   fileType: DriveFileTypeFilter;
   project: DriveProjectFilter;
+  companies: DriveCompanyFilter;
   origin: DriveOriginFilter;
   modified: DriveModifiedFilter;
   searchScope: DriveSearchScope;
@@ -265,6 +269,7 @@ export function DriveSidebar({
         q: query,
         type: fileType,
         project,
+        companies,
         origin,
         modified,
         scope: searchScope,
@@ -279,6 +284,7 @@ export function DriveSidebar({
     sortBy,
     fileType,
     project,
+    companies,
     origin,
     modified,
     searchScope,

@@ -25,6 +25,15 @@ export interface DriveProjectOption {
   name: string;
 }
 
+/** Company option for the Unternehmen multi-select filter. */
+export interface DriveCompanyOption {
+  id: string;
+  name: string;
+}
+
+/** Selected Consolidate company ids; empty = no company restriction. */
+export type DriveCompanyFilter = string[];
+
 /** Document origin: Task attachments, E-Mail attachments, or both. */
 export type DriveOriginFilter = "all" | "email" | "task";
 
@@ -101,6 +110,11 @@ export interface DriveDocument {
     id: string;
     name: string;
   };
+  /** Companies linked via Consolidate associations (Relations). */
+  companies?: Array<{
+    id: string;
+    name: string;
+  }>;
   responsible?: {
     id: string;
     name: string;

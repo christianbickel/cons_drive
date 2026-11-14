@@ -2,6 +2,7 @@
 
 import { drivePath } from "@/lib/drive/helpers";
 import type {
+  DriveCompanyFilter,
   DriveFileTypeFilter,
   DriveGroupBy,
   DriveModifiedFilter,
@@ -21,6 +22,7 @@ export function DrivePagination({
   sortBy,
   fileType,
   project,
+  companies,
   origin,
   modified,
   searchScope,
@@ -34,6 +36,7 @@ export function DrivePagination({
   sortBy: DriveSortBy;
   fileType: DriveFileTypeFilter;
   project: DriveProjectFilter;
+  companies: DriveCompanyFilter;
   origin: DriveOriginFilter;
   modified: DriveModifiedFilter;
   searchScope: DriveSearchScope;
@@ -54,6 +57,7 @@ export function DrivePagination({
       q: query,
       type: fileType,
       project,
+      companies,
       origin,
       modified,
       scope: searchScope,

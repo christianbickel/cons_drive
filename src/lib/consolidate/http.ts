@@ -54,14 +54,17 @@ async function parseGraphqlResponse<T>(
     );
   }
 
+  const payload = (await response.json().catch(() => ({}))) as GraphQLResponse<T>;
+
   if (!response.ok) {
+    const graphqlMessage = payload.errors?.map((e) => e.message).join("; ");
     throw new ConsolidateApiError(
-      `Consolidate API HTTP ${response.status}`,
-      response.status
+      graphqlMessage || `Consolidate API HTTP ${response.status}`,
+      response.status,
+      payload.errors
     );
   }
 
-  const payload = (await response.json()) as GraphQLResponse<T>;
   return { payload, setCookie };
 }
 

@@ -4,6 +4,8 @@ import { Menu } from "lucide-react";
 import { useEffect, useState } from "react";
 import { groupDriveDocuments } from "@/lib/drive/helpers";
 import type {
+  DriveCompanyFilter,
+  DriveCompanyOption,
   DriveDocument,
   DriveFileTypeFilter,
   DriveGroupBy,
@@ -31,6 +33,7 @@ function DriveViewContent({
   documents,
   total,
   recentProjects,
+  selectedCompanies,
   groupBy,
   sortBy,
   page,
@@ -38,6 +41,7 @@ function DriveViewContent({
   query,
   fileType,
   project,
+  companies,
   origin,
   modified,
   searchScope,
@@ -49,6 +53,7 @@ function DriveViewContent({
   documents: DriveDocument[];
   total: number;
   recentProjects: DriveProjectOption[];
+  selectedCompanies: DriveCompanyOption[];
   groupBy: DriveGroupBy;
   sortBy: DriveSortBy;
   page: number;
@@ -56,6 +61,7 @@ function DriveViewContent({
   query: string;
   fileType: DriveFileTypeFilter;
   project: DriveProjectFilter;
+  companies: DriveCompanyFilter;
   origin: DriveOriginFilter;
   modified: DriveModifiedFilter;
   searchScope: DriveSearchScope;
@@ -111,6 +117,7 @@ function DriveViewContent({
         sortBy={sortBy}
         fileType={fileType}
         project={project}
+        companies={companies}
         origin={origin}
         modified={modified}
         searchScope={searchScope}
@@ -151,6 +158,7 @@ function DriveViewContent({
             sortBy={sortBy}
             fileType={fileType}
             project={project}
+            companies={companies}
             origin={origin}
             modified={modified}
             searchScope={searchScope}
@@ -172,6 +180,8 @@ function DriveViewContent({
               sortBy={sortBy}
               fileType={fileType}
               project={project}
+              companies={companies}
+              selectedCompanies={selectedCompanies}
               origin={origin}
               recentProjects={recentProjects}
               modified={modified}
@@ -198,6 +208,7 @@ function DriveViewContent({
                 sortBy={sortBy}
                 fileType={fileType}
                 project={project}
+                companies={companies}
                 origin={origin}
                 modified={modified}
                 searchScope={searchScope}
@@ -221,6 +232,7 @@ function DriveViewContent({
                   sortBy={sortBy}
                   fileType={fileType}
                   project={project}
+                  companies={companies}
                   origin={origin}
                   modified={modified}
                   searchScope={searchScope}
