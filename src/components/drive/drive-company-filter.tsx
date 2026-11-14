@@ -106,7 +106,7 @@ export function DriveCompanyFilter({
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger
         className={cn(
-          "inline-flex min-h-10 items-center gap-1.5 rounded-full bg-[#e9eef6] px-3 text-sm text-[#1f1f1f] touch-manipulation sm:h-9 sm:min-h-0 sm:px-3.5",
+          "inline-flex min-h-10 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-[#e9eef6] px-3 text-sm text-[#1f1f1f] touch-manipulation sm:h-9 sm:min-h-0 sm:px-3.5",
           "outline-none transition-[background-color,box-shadow] duration-150 ease-[cubic-bezier(0.2,0,0,1)]",
           "hover:bg-[#e1e7f0] focus-visible:ring-3 focus-visible:ring-ring/50",
           "data-popup-open:bg-white data-popup-open:shadow-[0_1px_3px_0_rgba(60,64,67,0.3),0_4px_8px_3px_rgba(60,64,67,0.15)]",
@@ -115,7 +115,7 @@ export function DriveCompanyFilter({
         aria-label="Nach Unternehmen filtern"
       >
         <Building2 className="size-4 shrink-0 opacity-80" aria-hidden />
-        <span className="max-w-[8rem] truncate sm:max-w-[12rem]">{label}</span>
+        <span className="min-w-0 truncate">{label}</span>
         <ChevronDown className="size-3.5 shrink-0 opacity-70" aria-hidden />
       </DropdownMenuTrigger>
       <DropdownMenuContent

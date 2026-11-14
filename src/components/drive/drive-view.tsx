@@ -168,12 +168,9 @@ function DriveViewContent({
         </div>
 
         <header className="shrink-0 px-3 pt-4 pb-4 sm:px-6 sm:pt-8 sm:pb-5 md:px-10">
-          <div className="mx-auto max-w-3xl space-y-4 text-center sm:space-y-5">
-            <h1 className="text-[1.35rem] font-normal tracking-tight text-[#1f1f1f] sm:text-[1.75rem] md:text-[2rem]">
-              <span className="md:hidden">Suche</span>
-              <span className="hidden md:inline">
-                Willkommen bei Consolidate Drive
-              </span>
+          <div className="mx-auto w-full max-w-5xl space-y-4 text-center sm:space-y-5">
+            <h1 className="hidden text-[1.75rem] font-normal tracking-tight text-[#1f1f1f] md:block md:text-[2rem]">
+              Willkommen bei Consolidate Drive
             </h1>
             <DriveSearchField
               groupBy={groupBy}
