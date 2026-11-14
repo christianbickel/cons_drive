@@ -6,6 +6,8 @@ import {
   CalendarClock,
   CalendarPlus,
   FolderKanban,
+  HardDrive,
+  Home,
   Layers,
   LayoutGrid,
   ListFilter,
@@ -18,6 +20,8 @@ import { Button } from "@/components/ui/button";
 import {
   DRIVE_GROUP_FIELD_OPTIONS,
   drivePath,
+  emptyDriveMoreFilters,
+  isMinePlace,
   isModifiedFilterActive,
   toggleDriveGroupField,
 } from "@/lib/drive/helpers";
@@ -27,7 +31,9 @@ import type {
   DriveGroupBy,
   DriveGroupField,
   DriveModifiedFilter,
+  DriveMoreFilters,
   DriveOriginFilter,
+  DrivePlace,
   DriveProjectFilter,
   DriveSearchScope,
   DriveSortBy,
@@ -96,6 +102,7 @@ function SidebarBody({
   sortBy,
   fileType,
   project,
+  place,
   origin,
   modified,
   searchScope,
@@ -112,6 +119,7 @@ function SidebarBody({
   fileType: DriveFileTypeFilter;
   project: DriveProjectFilter;
   companies: DriveCompanyFilter;
+  place: DrivePlace;
   origin: DriveOriginFilter;
   modified: DriveModifiedFilter;
   searchScope: DriveSearchScope;
@@ -120,9 +128,17 @@ function SidebarBody({
   query: string;
   total: number;
   userName?: string;
-  onNavigate: (next: { groupBy?: DriveGroupBy; sortBy?: DriveSortBy }) => void;
+  onNavigate: (next: {
+    groupBy?: DriveGroupBy;
+    sortBy?: DriveSortBy;
+    place?: DrivePlace;
+    resetFilters?: boolean;
+  }) => void;
   onClose?: () => void;
 }) {
+  const mineActive = isMinePlace(place);
+  const homeActive = !mineActive;
+
   return (
     <>
       <div className="flex items-start justify-between gap-2 px-3">
@@ -152,6 +168,40 @@ function SidebarBody({
           </button>
         ) : null}
       </div>
+
+      <nav aria-label="Suchbereich" className="space-y-1">
+        <p className="px-4 pb-1 text-[0.7rem] font-medium tracking-wide text-muted-foreground uppercase">
+          Suchbereich
+        </p>
+        <SidebarButton
+          active={homeActive}
+          icon={Home}
+          onClick={() =>
+            onNavigate({
+              groupBy: [],
+              sortBy: "modified",
+              place: "home",
+              resetFilters: true,
+            })
+          }
+        >
+          Unternehmen
+        </SidebarButton>
+        <SidebarButton
+          active={mineActive}
+          icon={HardDrive}
+          onClick={() =>
+            onNavigate({
+              groupBy: [],
+              sortBy: "modified",
+              place: "mine",
+              resetFilters: true,
+            })
+          }
+        >
+          Meine Ablage
+        </SidebarButton>
+      </nav>
 
       <nav aria-label="Gruppierung" className="space-y-1">
         <p className="px-4 pb-1 text-[0.7rem] font-medium tracking-wide text-muted-foreground uppercase">
@@ -230,6 +280,8 @@ export function DriveSidebar({
   fileType,
   project,
   companies,
+  place,
+  more,
   origin,
   modified,
   searchScope,
@@ -246,6 +298,8 @@ export function DriveSidebar({
   fileType: DriveFileTypeFilter;
   project: DriveProjectFilter;
   companies: DriveCompanyFilter;
+  place: DrivePlace;
+  more: DriveMoreFilters;
   origin: DriveOriginFilter;
   modified: DriveModifiedFilter;
   searchScope: DriveSearchScope;
@@ -259,23 +313,44 @@ export function DriveSidebar({
 }) {
   const { navigate } = useDriveNavigation();
 
-  function go(next: { groupBy?: DriveGroupBy; sortBy?: DriveSortBy }) {
-    navigate(
-      drivePath({
-        groupBy: next.groupBy ?? groupBy,
-        sortBy: next.sortBy ?? sortBy,
-        page: 1,
-        pageSize,
-        q: query,
-        type: fileType,
-        project,
-        companies,
-        origin,
-        modified,
-        scope: searchScope,
-        view: viewMode,
-      })
-    );
+  function go(next: {
+    groupBy?: DriveGroupBy;
+    sortBy?: DriveSortBy;
+    place?: DrivePlace;
+    resetFilters?: boolean;
+  }) {
+    if (next.resetFilters) {
+      navigate(
+        drivePath({
+          groupBy: next.groupBy ?? [],
+          sortBy: next.sortBy ?? "modified",
+          page: 1,
+          pageSize,
+          place: next.place ?? "home",
+          more: emptyDriveMoreFilters(),
+          view: viewMode,
+        })
+      );
+    } else {
+      navigate(
+        drivePath({
+          groupBy: next.groupBy ?? groupBy,
+          sortBy: next.sortBy ?? sortBy,
+          page: 1,
+          pageSize,
+          q: query,
+          type: fileType,
+          project,
+          companies,
+          place: next.place ?? place,
+          more,
+          origin,
+          modified,
+          scope: searchScope,
+          view: viewMode,
+        })
+      );
+    }
     onMobileClose?.();
   }
 
@@ -285,6 +360,7 @@ export function DriveSidebar({
     fileType,
     project,
     companies,
+    place,
     origin,
     modified,
     searchScope,

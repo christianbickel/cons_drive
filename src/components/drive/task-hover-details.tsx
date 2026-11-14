@@ -1,12 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import type { DriveDocument } from "@/lib/drive/types";
+import { cn } from "@/lib/utils";
 import { formatRelativeMoment } from "./format";
-
-const OFFSET_X = 14;
-const OFFSET_Y = 14;
 
 function DetailRow({
   label,
@@ -16,110 +12,69 @@ function DetailRow({
   value?: string | null;
 }) {
   return (
-    <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-2 gap-y-0.5">
-      <dt className="text-[0.65rem] font-medium uppercase tracking-[0.08em] text-white/55">
+    <div className="grid grid-cols-[4.75rem_minmax(0,1fr)] gap-x-2">
+      <dt className="text-[0.65rem] font-medium tracking-wide text-[#5f6368]">
         {label}
       </dt>
-      <dd className="max-w-[14rem] truncate text-xs text-white/95">
+      <dd className="truncate text-[0.7rem] text-[#1f1f1f]">
         {value?.trim() || "—"}
       </dd>
     </div>
   );
 }
 
-function HoverPanel({
-  document,
-  x,
-  y,
+/**
+ * Task/E-Mail details below the thumbnail.
+ * Shown while the thumbnail is hovered (desktop) or when `open` (mobile tap).
+ * Absolutely positioned so the grid layout height stays unchanged.
+ */
+export function TaskHoverDetails({
+  document: driveDocument,
+  open = false,
 }: {
   document: DriveDocument;
-  x: number;
-  y: number;
+  open?: boolean;
 }) {
-  const left = Math.min(x + OFFSET_X, window.innerWidth - 240);
-  const top = Math.min(y + OFFSET_Y, window.innerHeight - 180);
-
   return (
     <div
-      className="pointer-events-none fixed z-50 rounded-lg border border-white/15 bg-slate-950/92 px-2.5 py-2 shadow-[0_12px_28px_-12px_rgba(0,0,0,0.65)] backdrop-blur-md"
-      style={{ left, top }}
+      className={cn(
+        "pointer-events-none absolute top-full right-0 -left-2 z-20 -mr-2 rounded-b-2xl bg-white px-3 pt-2 pb-3 shadow-[0_1px_3px_0_rgba(60,64,67,0.3),0_4px_8px_3px_rgba(60,64,67,0.15)] transition-opacity duration-150 ease-[cubic-bezier(0.2,0,0,1)]",
+        open ? "opacity-100" : "opacity-0"
+      )}
       role="tooltip"
     >
-      <p className="mb-1.5 truncate text-[0.7rem] font-semibold text-white">
-        {document.source === "email" ? "E-Mail-Details" : "Task-Details"}
-      </p>
-      <dl className="space-y-1">
-        {document.source === "email" ? (
+      <dl className="space-y-0.5">
+        {driveDocument.source === "email" ? (
           <>
             <DetailRow
               label="Betreff"
-              value={document.email?.subject ?? document.task.name}
+              value={driveDocument.email?.subject ?? driveDocument.task.name}
             />
-            <DetailRow label="Absender" value={document.email?.from} />
+            <DetailRow label="Absender" value={driveDocument.email?.from} />
             <DetailRow
               label="Gesendet"
-              value={formatRelativeMoment(document.email?.sentAt)}
+              value={formatRelativeMoment(driveDocument.email?.sentAt)}
             />
           </>
         ) : (
           <>
-            <DetailRow label="Typ" value={document.taskType?.name} />
-            <DetailRow label="Status" value={document.task.status?.name} />
-            <DetailRow label="Verantw." value={document.responsible?.name} />
-            <DetailRow label="Task" value={document.task.name} />
-            <DetailRow label="Projekt" value={document.project?.name} />
+            <DetailRow label="Typ" value={driveDocument.taskType?.name} />
+            <DetailRow label="Status" value={driveDocument.task.status?.name} />
+            <DetailRow
+              label="Verantw."
+              value={driveDocument.responsible?.name}
+            />
+            <DetailRow label="Task" value={driveDocument.task.name} />
+            <DetailRow label="Projekt" value={driveDocument.project?.name} />
             <DetailRow
               label="Geändert"
               value={formatRelativeMoment(
-                document.modifiedAt ?? document.createdAt
+                driveDocument.modifiedAt ?? driveDocument.createdAt
               )}
             />
           </>
         )}
       </dl>
     </div>
-  );
-}
-
-export function TaskHoverDetails({
-  document: driveDocument,
-}: {
-  document: DriveDocument;
-}) {
-  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
-  const [mounted, setMounted] = useState(false);
-  const [finePointer, setFinePointer] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    const media = window.matchMedia("(hover: hover) and (pointer: fine)");
-    const sync = () => setFinePointer(media.matches);
-    sync();
-    media.addEventListener("change", sync);
-    return () => media.removeEventListener("change", sync);
-  }, []);
-
-  if (!finePointer) return null;
-
-  return (
-    <>
-      <div
-        className="absolute inset-0 z-10"
-        onMouseEnter={(event) =>
-          setPos({ x: event.clientX, y: event.clientY })
-        }
-        onMouseMove={(event) =>
-          setPos({ x: event.clientX, y: event.clientY })
-        }
-        onMouseLeave={() => setPos(null)}
-        aria-hidden
-      />
-      {mounted && pos
-        ? createPortal(
-            <HoverPanel document={driveDocument} x={pos.x} y={pos.y} />,
-            globalThis.document.body
-          )
-        : null}
-    </>
   );
 }

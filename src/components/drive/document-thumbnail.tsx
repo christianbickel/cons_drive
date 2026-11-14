@@ -41,10 +41,12 @@ export function DocumentThumbnail({
   src,
   alt,
   previewType,
+  zoomed = false,
 }: {
   src: string;
   alt: string;
   previewType: DrivePreviewType;
+  zoomed?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
   const showImage =
@@ -68,7 +70,11 @@ export function DocumentThumbnail({
       <img
         src={src}
         alt={alt}
-        className="absolute inset-[1px] h-[calc(100%-2px)] w-[calc(100%-2px)] object-cover outline outline-1 outline-black/10"
+        className={cn(
+          "absolute inset-0 h-full w-full origin-top-left object-cover object-left-top",
+          "transition-transform duration-150 ease-[cubic-bezier(0.2,0,0,1)]",
+          zoomed ? "scale-[1.2]" : "scale-100"
+        )}
         loading="lazy"
         onError={() => setFailed(true)}
       />

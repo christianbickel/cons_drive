@@ -1,17 +1,24 @@
 import type {
   DriveCompanyFilter,
+  DriveCreatorFilter,
   DriveDocument,
   DriveDocumentGroup,
   DriveFileTypeFilter,
+  DriveFilterOption,
   DriveGroupBy,
   DriveGroupField,
   DriveModifiedFilter,
   DriveModifiedPreset,
+  DriveMoreFilters,
   DriveOriginFilter,
   DrivePreviewType,
+  DrivePlace,
   DriveProjectFilter,
+  DriveResponsibleFilter,
   DriveSearchScope,
   DriveSortBy,
+  DriveStatusFilter,
+  DriveTaskTypeFilter,
   DriveViewMode,
 } from "@/lib/drive/types";
 
@@ -296,6 +303,45 @@ export function isCompanyFilterActive(companies: DriveCompanyFilter): boolean {
   return companies.length > 0;
 }
 
+export function parseDriveResponsibleFilter(
+  raw: string | string[] | undefined
+): DriveResponsibleFilter {
+  return parseIdList(raw);
+}
+
+export function isResponsibleFilterActive(
+  responsible: DriveResponsibleFilter
+): boolean {
+  return responsible.length > 0;
+}
+
+export function parseDrivePlace(
+  raw: string | string[] | undefined
+): DrivePlace {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return value === "mine" ? "mine" : "home";
+}
+
+export function isMinePlace(place: DrivePlace): boolean {
+  return place === "mine";
+}
+
+/**
+ * Restricts tasks/docs by responsible. E-Mail attachments stay included —
+ * mailbox scoping is handled at fetch time via `myMailboxes` (login user).
+ */
+export function filterDriveDocumentsByResponsible(
+  documents: DriveDocument[],
+  responsible: DriveResponsibleFilter
+): DriveDocument[] {
+  if (responsible.length === 0) return documents;
+  const selected = new Set(responsible);
+  return documents.filter((doc) => {
+    if (doc.source === "email") return true;
+    return doc.responsible?.id != null && selected.has(doc.responsible.id);
+  });
+}
+
 export function filterDriveDocumentsByCompany(
   documents: DriveDocument[],
   companies: DriveCompanyFilter
@@ -323,20 +369,78 @@ export function parseDriveOriginFilter(
   return "all";
 }
 
-/** Project filter or any grouping implies task attachments only (emails have no project). */
+function parseIdList(raw: string | string[] | undefined): string[] {
+  const parts = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  const ids = parts
+    .flatMap((value) => value.split(","))
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return [...new Set(ids)];
+}
+
+export function parseDriveStatusFilter(
+  raw: string | string[] | undefined
+): DriveStatusFilter {
+  return parseIdList(raw);
+}
+
+export function parseDriveCreatorFilter(
+  raw: string | string[] | undefined
+): DriveCreatorFilter {
+  return parseIdList(raw);
+}
+
+export function parseDriveTaskTypeFilter(
+  raw: string | string[] | undefined
+): DriveTaskTypeFilter {
+  return parseIdList(raw);
+}
+
+export function parseDriveMoreFilters(options: {
+  status?: string | string[];
+  creator?: string | string[];
+  taskType?: string | string[];
+}): DriveMoreFilters {
+  return {
+    status: parseDriveStatusFilter(options.status),
+    creator: parseDriveCreatorFilter(options.creator),
+    taskType: parseDriveTaskTypeFilter(options.taskType),
+  };
+}
+
+export function isMoreFilterActive(more: DriveMoreFilters | undefined): boolean {
+  if (!more) return false;
+  return (
+    more.status.length > 0 ||
+    more.creator.length > 0 ||
+    more.taskType.length > 0
+  );
+}
+
+export function emptyDriveMoreFilters(): DriveMoreFilters {
+  return { status: [], creator: [], taskType: [] };
+}
+
+/** Project/more filters or grouping implies task attachments only. */
 export function requiresTaskOnlyOrigin(
   project: DriveProjectFilter | undefined,
-  groupBy: DriveGroupBy
+  groupBy: DriveGroupBy,
+  more?: DriveMoreFilters
 ): boolean {
-  return isProjectFilterActive(project ?? []) || groupBy.length > 0;
+  return (
+    isProjectFilterActive(project ?? []) ||
+    groupBy.length > 0 ||
+    isMoreFilterActive(more)
+  );
 }
 
 export function resolveDriveOriginFilter(
   origin: DriveOriginFilter | undefined,
   project: DriveProjectFilter | undefined,
-  groupBy: DriveGroupBy
+  groupBy: DriveGroupBy,
+  more?: DriveMoreFilters
 ): DriveOriginFilter {
-  if (requiresTaskOnlyOrigin(project, groupBy)) return "task";
+  if (requiresTaskOnlyOrigin(project, groupBy, more)) return "task";
   return origin ?? "all";
 }
 
@@ -424,7 +528,7 @@ function parseIsoDateLocal(value: string): Date | null {
 /** Inclusive local-time range for the modified filter, or null if unrestricted. */
 export function getModifiedFilterRange(
   filter: DriveModifiedFilter,
-  now = new Date()
+  now?: Date
 ): { start: Date; end: Date } | null {
   if (filter.preset === "all") return null;
 
@@ -441,27 +545,28 @@ export function getModifiedFilterRange(
     };
   }
 
-  const end = endOfLocalDay(now);
+  const reference = now ?? new Date();
+  const end = endOfLocalDay(reference);
   if (filter.preset === "today") {
-    return { start: startOfLocalDay(now), end };
+    return { start: startOfLocalDay(reference), end };
   }
   if (filter.preset === "days7") {
-    const start = startOfLocalDay(now);
+    const start = startOfLocalDay(reference);
     start.setDate(start.getDate() - 6);
     return { start, end };
   }
   if (filter.preset === "days30") {
-    const start = startOfLocalDay(now);
+    const start = startOfLocalDay(reference);
     start.setDate(start.getDate() - 29);
     return { start, end };
   }
   if (filter.preset === "thisYear") {
     return {
-      start: new Date(now.getFullYear(), 0, 1),
+      start: new Date(reference.getFullYear(), 0, 1),
       end,
     };
   }
-  const year = now.getFullYear() - 1;
+  const year = reference.getFullYear() - 1;
   return {
     start: new Date(year, 0, 1),
     end: endOfLocalDay(new Date(year, 11, 31)),
@@ -570,6 +675,91 @@ export function filterDriveDocumentsByProject(
   );
 }
 
+export function filterDriveDocumentsByStatus(
+  documents: DriveDocument[],
+  statuses: DriveStatusFilter
+): DriveDocument[] {
+  if (statuses.length === 0) return documents;
+  const selected = new Set(statuses);
+  return documents.filter(
+    (doc) =>
+      doc.source === "task" &&
+      doc.task.status?.name != null &&
+      selected.has(doc.task.status.name)
+  );
+}
+
+export function filterDriveDocumentsByCreator(
+  documents: DriveDocument[],
+  creators: DriveCreatorFilter
+): DriveDocument[] {
+  if (creators.length === 0) return documents;
+  const selected = new Set(creators);
+  return documents.filter(
+    (doc) => doc.createdBy?.id != null && selected.has(doc.createdBy.id)
+  );
+}
+
+export function filterDriveDocumentsByTaskType(
+  documents: DriveDocument[],
+  taskTypes: DriveTaskTypeFilter
+): DriveDocument[] {
+  if (taskTypes.length === 0) return documents;
+  const selected = new Set(taskTypes);
+  return documents.filter(
+    (doc) =>
+      doc.source === "task" &&
+      doc.taskType?.key != null &&
+      selected.has(doc.taskType.key)
+  );
+}
+
+export function filterDriveDocumentsByMore(
+  documents: DriveDocument[],
+  more: DriveMoreFilters | undefined
+): DriveDocument[] {
+  if (!more || !isMoreFilterActive(more)) return documents;
+  const byStatus = filterDriveDocumentsByStatus(documents, more.status);
+  const byCreator = filterDriveDocumentsByCreator(byStatus, more.creator);
+  return filterDriveDocumentsByTaskType(byCreator, more.taskType);
+}
+
+/** Collect unique Ersteller / Task-Typ options from loaded documents. */
+export function collectDriveMoreFilterOptions(documents: DriveDocument[]): {
+  creators: DriveFilterOption[];
+  taskTypes: DriveFilterOption[];
+} {
+  const creators = new Map<string, DriveFilterOption>();
+  const taskTypes = new Map<string, DriveFilterOption>();
+
+  for (const doc of documents) {
+    if (doc.createdBy?.id) {
+      if (!creators.has(doc.createdBy.id)) {
+        creators.set(doc.createdBy.id, {
+          id: doc.createdBy.id,
+          name: doc.createdBy.name,
+        });
+      }
+    }
+    if (doc.source === "task" && doc.taskType?.key) {
+      if (!taskTypes.has(doc.taskType.key)) {
+        taskTypes.set(doc.taskType.key, {
+          id: doc.taskType.key,
+          name: doc.taskType.name,
+        });
+      }
+    }
+  }
+
+  const byName = (a: DriveFilterOption, b: DriveFilterOption) =>
+    a.name.localeCompare(b.name, "de", { sensitivity: "base" });
+
+  return {
+    creators: [...creators.values()].sort(byName),
+    taskTypes: [...taskTypes.values()].sort(byName),
+  };
+}
+
 /** Server/client shared pipeline: filter → sort → paginate. */
 export function prepareDriveDocumentPage(
   documents: DriveDocument[],
@@ -580,6 +770,8 @@ export function prepareDriveDocumentPage(
     fileType: DriveFileTypeFilter;
     project: DriveProjectFilter;
     companies?: DriveCompanyFilter;
+    responsible?: DriveResponsibleFilter;
+    more?: DriveMoreFilters;
     origin: DriveOriginFilter;
     modified: DriveModifiedFilter;
     sortBy: DriveSortBy;
@@ -598,7 +790,12 @@ export function prepareDriveDocumentPage(
     byProject,
     options.companies ?? []
   );
-  const filtered = filterDriveDocumentsByModified(byCompany, options.modified);
+  const byResponsible = filterDriveDocumentsByResponsible(
+    byCompany,
+    options.responsible ?? []
+  );
+  const byMore = filterDriveDocumentsByMore(byResponsible, options.more);
+  const filtered = filterDriveDocumentsByModified(byMore, options.modified);
   const sorted = sortDriveDocuments(filtered, options.sortBy);
   return paginateDocuments(sorted, options.page, options.pageSize);
 }
@@ -646,6 +843,8 @@ export function drivePath(options: {
   type?: DriveFileTypeFilter;
   project?: DriveProjectFilter;
   companies?: DriveCompanyFilter;
+  place?: DrivePlace;
+  more?: DriveMoreFilters;
   origin?: DriveOriginFilter;
   modified?: DriveModifiedFilter;
   scope?: DriveSearchScope;
@@ -656,6 +855,9 @@ export function drivePath(options: {
   params.set("sort", options.sortBy);
   params.set("page", String(options.page ?? 1));
   params.set("pageSize", String(options.pageSize));
+  if (options.place === "mine") {
+    params.set("place", "mine");
+  }
   const q = options.q?.trim();
   if (q) params.set("q", q);
   if (options.type && options.type !== "all") {
@@ -667,10 +869,21 @@ export function drivePath(options: {
   for (const companyId of options.companies ?? []) {
     if (companyId) params.append("company", companyId);
   }
+  const more = options.more ?? emptyDriveMoreFilters();
+  for (const status of more.status) {
+    if (status) params.append("status", status);
+  }
+  for (const creator of more.creator) {
+    if (creator) params.append("creator", creator);
+  }
+  for (const taskType of more.taskType) {
+    if (taskType) params.append("taskType", taskType);
+  }
   const origin = resolveDriveOriginFilter(
     options.origin,
     options.project,
-    options.groupBy
+    options.groupBy,
+    more
   );
   if (origin !== "all") {
     params.set("origin", origin);

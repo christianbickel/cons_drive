@@ -11,6 +11,7 @@ import { countGroupDocuments } from "@/lib/drive/helpers";
 import type { DriveDocumentGroup, DriveViewMode } from "@/lib/drive/types";
 import { cn } from "@/lib/utils";
 import { DocumentCard } from "./document-card";
+import { DocumentDetailsPinProvider } from "./document-details-pin";
 import { DocumentListHeader, DocumentRow } from "./document-row";
 
 function GroupSection({
@@ -78,7 +79,7 @@ function GroupSection({
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
+            <div className="grid grid-cols-2 items-start gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
               {group.documents.map((document) => (
                 <DocumentCard key={document.id} document={document} />
               ))}
@@ -112,15 +113,17 @@ export function DriveGroupAccordion({
   }
 
   return (
-    <div className="space-y-5">
-      {groups.map((group) => (
-        <GroupSection
-          key={group.key}
-          group={group}
-          defaultOpen
-          viewMode={viewMode}
-        />
-      ))}
-    </div>
+    <DocumentDetailsPinProvider>
+      <div className="space-y-5">
+        {groups.map((group) => (
+          <GroupSection
+            key={group.key}
+            group={group}
+            defaultOpen
+            viewMode={viewMode}
+          />
+        ))}
+      </div>
+    </DocumentDetailsPinProvider>
   );
 }

@@ -6,7 +6,9 @@ import type {
   DriveFileTypeFilter,
   DriveGroupBy,
   DriveModifiedFilter,
+  DriveMoreFilters,
   DriveOriginFilter,
+  DrivePlace,
   DriveProjectFilter,
   DriveSearchScope,
   DriveSortBy,
@@ -23,6 +25,8 @@ export function DrivePagination({
   fileType,
   project,
   companies,
+  place,
+  more,
   origin,
   modified,
   searchScope,
@@ -37,6 +41,8 @@ export function DrivePagination({
   fileType: DriveFileTypeFilter;
   project: DriveProjectFilter;
   companies: DriveCompanyFilter;
+  place: DrivePlace;
+  more: DriveMoreFilters;
   origin: DriveOriginFilter;
   modified: DriveModifiedFilter;
   searchScope: DriveSearchScope;
@@ -58,6 +64,8 @@ export function DrivePagination({
       type: fileType,
       project,
       companies,
+      place,
+      more,
       origin,
       modified,
       scope: searchScope,

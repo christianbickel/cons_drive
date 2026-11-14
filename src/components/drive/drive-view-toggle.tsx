@@ -7,7 +7,9 @@ import type {
   DriveFileTypeFilter,
   DriveGroupBy,
   DriveModifiedFilter,
+  DriveMoreFilters,
   DriveOriginFilter,
+  DrivePlace,
   DriveProjectFilter,
   DriveSearchScope,
   DriveSortBy,
@@ -23,6 +25,8 @@ export function DriveViewToggle({
   fileType,
   project,
   companies,
+  place,
+  more,
   origin,
   modified,
   searchScope,
@@ -35,6 +39,8 @@ export function DriveViewToggle({
   fileType: DriveFileTypeFilter;
   project: DriveProjectFilter;
   companies: DriveCompanyFilter;
+  place: DrivePlace;
+  more: DriveMoreFilters;
   origin: DriveOriginFilter;
   modified: DriveModifiedFilter;
   searchScope: DriveSearchScope;
@@ -55,6 +61,8 @@ export function DriveViewToggle({
         type: fileType,
         project,
         companies,
+        place,
+        more,
         origin,
         modified,
         scope: searchScope,

@@ -53,11 +53,9 @@ async function shareDocument(
 
 export function DocumentCardMenu({
   document,
-  onOpenChange,
   className,
 }: {
   document: DriveDocument;
-  onOpenChange?: (open: boolean) => void;
   className?: string;
 }) {
   const [shareLabel, setShareLabel] = useState("Teilen");
@@ -65,11 +63,11 @@ export function DocumentCardMenu({
   return (
     <div
       data-card-menu=""
-      className={cn("relative z-30 shrink-0", className)}
+      className={cn("relative z-10 shrink-0", className)}
       onClick={(event) => event.stopPropagation()}
       onMouseDown={(event) => event.stopPropagation()}
     >
-      <DropdownMenu onOpenChange={onOpenChange}>
+      <DropdownMenu>
         <DropdownMenuTrigger
           className={cn(
             "inline-flex size-10 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors touch-manipulation sm:size-8",
@@ -80,7 +78,12 @@ export function DocumentCardMenu({
         >
           <MoreVertical className="size-4" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" side="bottom" className="min-w-44">
+        <DropdownMenuContent
+          align="end"
+          side="bottom"
+          sideOffset={6}
+          className="min-w-44"
+        >
           <DropdownMenuItem
             onClick={() => {
               void openConsolidateLink(document.openUrl);

@@ -3,12 +3,17 @@ import "server-only";
 import type {
   DriveCompanyOption,
   DriveDocument,
+  DriveFilterOption,
   DrivePreviewType,
   DriveProjectOption,
 } from "@/lib/drive/types";
 import { toAndSearchString } from "@/lib/drive/helpers";
 import { getAuthSession } from "@/lib/auth/session";
 import { consolidateGraphql } from "./client";
+import {
+  ConsolidateApiError,
+  isConsolidateConversionError,
+} from "./errors";
 import {
   consolidateAttachmentViewUrl,
   consolidateEntryUrl,
@@ -315,6 +320,68 @@ const LAST_MODIFIED_DESC = [
   { metadata: { type: "LastModified", direction: "Descending" } },
 ];
 
+type TaskPageResult = {
+  dataEntries_Task: {
+    totalCount?: number;
+    pageInfo: { hasNextPage: boolean };
+    items: TaskNode[];
+  };
+};
+
+/**
+ * Fetch a Task page; if Consolidate fails on a corrupt document, binary-split
+ * the range so healthy siblings still load.
+ */
+async function fetchTaskPageResilient(options: {
+  query: string;
+  take: number;
+  skip: number;
+  order: typeof LAST_MODIFIED_DESC;
+  filter: typeof HAS_ATTACHMENTS_FILTER;
+}): Promise<{ items: TaskNode[]; hasNextPage: boolean; skippedCorrupt: boolean }> {
+  const { query, take, skip, order, filter } = options;
+  try {
+    const data = await consolidateGraphql<TaskPageResult>(query, {
+      take,
+      skip,
+      order,
+      filter,
+    });
+    return {
+      items: data.dataEntries_Task.items ?? [],
+      hasNextPage: Boolean(data.dataEntries_Task.pageInfo.hasNextPage),
+      skippedCorrupt: false,
+    };
+  } catch (error) {
+    if (!isConsolidateConversionError(error)) throw error;
+    if (take <= 1) {
+      // Skip the single corrupt document and keep paging.
+      return { items: [], hasNextPage: true, skippedCorrupt: true };
+    }
+    const leftTake = Math.ceil(take / 2);
+    const rightTake = take - leftTake;
+    const left = await fetchTaskPageResilient({
+      query,
+      take: leftTake,
+      skip,
+      order,
+      filter,
+    });
+    const right = await fetchTaskPageResilient({
+      query,
+      take: rightTake,
+      skip: skip + leftTake,
+      order,
+      filter,
+    });
+    return {
+      items: [...left.items, ...right.items],
+      hasNextPage: left.hasNextPage || right.hasNextPage,
+      skippedCorrupt: left.skippedCorrupt || right.skippedCorrupt,
+    };
+  }
+}
+
 const GLOBAL_SEARCH_TASKS_WITH_ATTACHMENTS = `
   query DriveFulltextTasksWithAttachments(
     $searchString: String
@@ -443,6 +510,12 @@ function mapTaskDocument(
           name: task.values.responsible.displayName,
         }
       : undefined,
+    createdBy: attachment.createdBy?.id
+      ? {
+          id: attachment.createdBy.id,
+          name: attachment.createdBy.displayName?.trim() || "Unbekannt",
+        }
+      : undefined,
     taskType: taskType
       ? {
           key: taskType.key,
@@ -541,6 +614,12 @@ function mapEmailDocument(
     project: projectFromConversation(conversation),
     companies: companiesFromAssociations(conversation.associations),
     responsible: responsibleFromConversation(conversation),
+    createdBy: attachment.createdBy?.id
+      ? {
+          id: attachment.createdBy.id,
+          name: attachment.createdBy.displayName?.trim() || "Unbekannt",
+        }
+      : undefined,
     taskType: {
       key: "email",
       name: "E-Mail",
@@ -647,8 +726,9 @@ async function listEmailDriveDocuments(options?: {
 
     while (hasNextPage && scannedConversations < maxConversations) {
       const first = Math.min(pageSize, maxConversations - scannedConversations);
-      const data: FolderConversationsPage =
-        await consolidateGraphql<FolderConversationsPage>(
+      let data: FolderConversationsPage;
+      try {
+        data = await consolidateGraphql<FolderConversationsPage>(
           LIST_MAILBOX_FOLDER_CONVERSATIONS,
           {
             folder: folder.id,
@@ -656,6 +736,17 @@ async function listEmailDriveDocuments(options?: {
             after,
           }
         );
+      } catch (error) {
+        if (
+          !isConsolidateConversionError(error) &&
+          !(error instanceof ConsolidateApiError && error.status === 500)
+        ) {
+          throw error;
+        }
+        // Skip this folder page / folder on corrupt mail documents.
+        truncated = true;
+        break;
+      }
 
       const nodes = (data.mailboxFolderConversations.nodes ?? []).filter(
         (
@@ -814,44 +905,66 @@ export async function listDriveDocuments(options?: {
         truncated: false,
       });
 
-  if (includeTasks) {
-    while (scannedTasks < maxTasks) {
-      const take = Math.min(pageSize, maxTasks - scannedTasks);
-      const data = await consolidateGraphql<{
-        dataEntries_Task: {
-          totalCount: number;
-          pageInfo: { hasNextPage: boolean };
-          items: TaskNode[];
-        };
-      }>(LIST_TASKS_WITH_ATTACHMENTS, {
-        take,
-        skip,
-        order: LAST_MODIFIED_DESC,
-        filter: HAS_ATTACHMENTS_FILTER,
-      });
+  let emailResult: {
+    documents: DriveDocument[];
+    scannedConversations: number;
+    truncated: boolean;
+  } = {
+    documents: [],
+    scannedConversations: 0,
+    truncated: false,
+  };
 
-      const items = data.dataEntries_Task.items ?? [];
-      scannedTasks += items.length;
+  try {
+    if (includeTasks) {
+      while (skip < maxTasks) {
+        const take = Math.min(pageSize, maxTasks - skip);
+        const page = await fetchTaskPageResilient({
+          query: LIST_TASKS_WITH_ATTACHMENTS,
+          take,
+          skip,
+          order: LAST_MODIFIED_DESC,
+          filter: HAS_ATTACHMENTS_FILTER,
+        });
 
-      for (const task of items) {
-        if (!task.attachments?.length) continue;
-        for (const attachment of task.attachments) {
-          taskDocuments.push(mapTaskDocument(task, attachment, apiUrl));
+        for (const task of page.items) {
+          if (!task.attachments?.length) continue;
+          for (const attachment of task.attachments) {
+            taskDocuments.push(mapTaskDocument(task, attachment, apiUrl));
+          }
+        }
+
+        scannedTasks += page.items.length;
+        skip += take;
+
+        if (page.skippedCorrupt && page.items.length === 0) {
+          // Corrupt document skipped — keep paging past it.
+          continue;
+        }
+        if (!page.hasNextPage || page.items.length === 0) {
+          break;
+        }
+        if (skip >= maxTasks) {
+          taskTruncated = true;
+          break;
         }
       }
-
-      if (!data.dataEntries_Task.pageInfo.hasNextPage || items.length === 0) {
-        break;
-      }
-      if (scannedTasks >= maxTasks) {
-        taskTruncated = true;
-        break;
-      }
-      skip += take;
+    }
+  } finally {
+    // Always settle the parallel mailbox fetch to avoid unhandled rejections.
+    try {
+      emailResult = await emailPromise;
+    } catch (error) {
+      if (!(error instanceof ConsolidateApiError)) throw error;
+      // Mailbox conversion/HTTP failures should not blank the whole Drive.
+      emailResult = {
+        documents: [],
+        scannedConversations: 0,
+        truncated: true,
+      };
     }
   }
 
-  const emailResult = await emailPromise;
   const documents = mergeDocuments([
     ...taskDocuments,
     ...emailResult.documents,
@@ -909,48 +1022,77 @@ export async function searchDriveDocumentsFulltext(options: {
         truncated: false,
       });
 
-  if (includeTasks) {
-    while (scannedTasks < maxTasks) {
-      const take = Math.min(pageSize, maxTasks - scannedTasks);
-      const data = await consolidateGraphql<{
-        globalSearch: {
-          totalCount: number;
-          items: Array<(TaskNode & { __typename?: string }) | null>;
-        };
-      }>(GLOBAL_SEARCH_TASKS_WITH_ATTACHMENTS, {
-        searchString,
-        take,
-        skip,
-      });
+  let emailResult: {
+    documents: DriveDocument[];
+    scannedConversations: number;
+    truncated: boolean;
+  } = {
+    documents: [],
+    scannedConversations: 0,
+    truncated: false,
+  };
 
-      totalCount = data.globalSearch.totalCount ?? 0;
-      const items = (data.globalSearch.items ?? []).filter(
-        (item): item is TaskNode & { __typename?: string } =>
-          !!item && (item.__typename === "Task" || !!item.id)
-      );
-      scannedTasks += items.length;
+  try {
+    if (includeTasks) {
+      while (skip < maxTasks) {
+        const take = Math.min(pageSize, maxTasks - skip);
+        try {
+          const data = await consolidateGraphql<{
+            globalSearch: {
+              totalCount: number;
+              items: Array<(TaskNode & { __typename?: string }) | null>;
+            };
+          }>(GLOBAL_SEARCH_TASKS_WITH_ATTACHMENTS, {
+            searchString,
+            take,
+            skip,
+          });
 
-      for (const task of items) {
-        if (!task.attachments?.length) continue;
-        for (const attachment of task.attachments) {
-          if (seenAttachmentIds.has(attachment.id)) continue;
-          seenAttachmentIds.add(attachment.id);
-          taskDocuments.push(mapTaskDocument(task, attachment, apiUrl));
+          totalCount = data.globalSearch.totalCount ?? 0;
+          const items = (data.globalSearch.items ?? []).filter(
+            (item): item is TaskNode & { __typename?: string } =>
+              !!item && (item.__typename === "Task" || !!item.id)
+          );
+          scannedTasks += items.length;
+          skip += take;
+
+          for (const task of items) {
+            if (!task.attachments?.length) continue;
+            for (const attachment of task.attachments) {
+              if (seenAttachmentIds.has(attachment.id)) continue;
+              seenAttachmentIds.add(attachment.id);
+              taskDocuments.push(mapTaskDocument(task, attachment, apiUrl));
+            }
+          }
+
+          if (items.length === 0 || skip >= totalCount) {
+            break;
+          }
+          if (skip >= maxTasks && totalCount > skip) {
+            taskTruncated = true;
+            break;
+          }
+        } catch (error) {
+          if (!isConsolidateConversionError(error)) throw error;
+          // Skip this search window (corrupt indexed document) and continue.
+          skip += Math.max(1, take);
+          taskTruncated = true;
         }
       }
-
-      if (items.length === 0 || scannedTasks >= totalCount) {
-        break;
-      }
-      if (scannedTasks >= maxTasks && totalCount > scannedTasks) {
-        taskTruncated = true;
-        break;
-      }
-      skip += take;
+    }
+  } finally {
+    try {
+      emailResult = await emailPromise;
+    } catch (error) {
+      if (!(error instanceof ConsolidateApiError)) throw error;
+      emailResult = {
+        documents: [],
+        scannedConversations: 0,
+        truncated: true,
+      };
     }
   }
 
-  const emailResult = await emailPromise;
   const documents = mergeDocuments([
     ...taskDocuments,
     ...emailResult.documents,
@@ -993,53 +1135,53 @@ export async function listSuggestedDriveDocuments(options?: {
     pageSize: 20,
   });
 
-  while (scannedTasks < maxTasks && candidates.length < limit) {
-    const take = Math.min(pageSize, maxTasks - scannedTasks);
-    const data = await consolidateGraphql<{
-      dataEntries_Task: {
-        pageInfo: { hasNextPage: boolean };
-        items: TaskNode[];
-      };
-    }>(LIST_RECENT_TASKS_WITH_ATTACHMENTS, {
-      take,
-      skip,
-      order: LAST_MODIFIED_DESC,
-      filter: HAS_ATTACHMENTS_FILTER,
-    });
+  let emailDocuments: DriveDocument[] = [];
+  let emailScanned = 0;
 
-    const items = data.dataEntries_Task.items ?? [];
-    scannedTasks += items.length;
+  try {
+    while (skip < maxTasks && candidates.length < limit) {
+      const take = Math.min(pageSize, maxTasks - skip);
+      const page = await fetchTaskPageResilient({
+        query: LIST_RECENT_TASKS_WITH_ATTACHMENTS,
+        take,
+        skip,
+        order: LAST_MODIFIED_DESC,
+        filter: HAS_ATTACHMENTS_FILTER,
+      });
 
-    for (const task of items) {
-      if (!task.attachments?.length) continue;
-      for (const attachment of task.attachments) {
-        if (!isTouchedByUser(attachment, userId)) continue;
-        candidates.push(mapTaskDocument(task, attachment, apiUrl));
+      scannedTasks += page.items.length;
+      skip += take;
+
+      for (const task of page.items) {
+        if (!task.attachments?.length) continue;
+        for (const attachment of task.attachments) {
+          if (!isTouchedByUser(attachment, userId)) continue;
+          candidates.push(mapTaskDocument(task, attachment, apiUrl));
+        }
+        if (candidates.length >= limit) break;
       }
-      if (candidates.length >= limit) break;
-    }
 
-    if (
-      candidates.length >= limit ||
-      !data.dataEntries_Task.pageInfo.hasNextPage ||
-      items.length === 0
-    ) {
-      break;
+      if (candidates.length >= limit) break;
+      if (page.skippedCorrupt && page.items.length === 0) continue;
+      if (!page.hasNextPage || page.items.length === 0) break;
     }
-    skip += take;
+  } finally {
+    try {
+      const emailResult = await emailPromise;
+      emailDocuments = emailResult.documents;
+      emailScanned = emailResult.scannedConversations;
+    } catch (error) {
+      if (!(error instanceof ConsolidateApiError)) throw error;
+    }
   }
 
-  const emailResult = await emailPromise;
-  const documents = mergeDocuments([
-    ...candidates,
-    ...emailResult.documents,
-  ])
+  const documents = mergeDocuments([...candidates, ...emailDocuments])
     .sort((a, b) => documentTimestamp(b) - documentTimestamp(a))
     .slice(0, limit);
 
   return {
     documents,
-    scannedTasks: scannedTasks + emailResult.scannedConversations,
+    scannedTasks: scannedTasks + emailScanned,
   };
 }
 
@@ -1067,39 +1209,20 @@ export async function listRecentDriveProjects(options?: {
   let skip = 0;
   let scannedTasks = 0;
 
-  while (scannedTasks < maxTasks && projects.length < limit) {
-    const take = Math.min(pageSize, maxTasks - scannedTasks);
-    const data = await consolidateGraphql<{
-      dataEntries_Task: {
-        pageInfo: { hasNextPage: boolean };
-        items: Array<{
-          id: string;
-          values: {
-            responsible?: { id: string } | null;
-            project?: {
-              id: string;
-              displayName?: string | null;
-              databaseId?: string | null;
-            } | null;
-          };
-          attachments?: Array<{
-            id: string;
-            createdBy?: { id: string } | null;
-            lastModifiedBy?: { id: string } | null;
-          }> | null;
-        }>;
-      };
-    }>(LIST_RECENT_TASKS_FOR_PROJECTS, {
+  while (skip < maxTasks && projects.length < limit) {
+    const take = Math.min(pageSize, maxTasks - skip);
+    const page = await fetchTaskPageResilient({
+      query: LIST_RECENT_TASKS_FOR_PROJECTS,
       take,
       skip,
       order: LAST_MODIFIED_DESC,
       filter: HAS_ATTACHMENTS_FILTER,
     });
 
-    const items = data.dataEntries_Task.items ?? [];
-    scannedTasks += items.length;
+    scannedTasks += page.items.length;
+    skip += take;
 
-    for (const task of items) {
+    for (const task of page.items) {
       if (projects.length >= limit) break;
       const touched =
         task.values.responsible?.id === userId ||
@@ -1118,10 +1241,8 @@ export async function listRecentDriveProjects(options?: {
       });
     }
 
-    if (!data.dataEntries_Task.pageInfo.hasNextPage || items.length === 0) {
-      break;
-    }
-    skip += take;
+    if (page.skippedCorrupt && page.items.length === 0) continue;
+    if (!page.hasNextPage || page.items.length === 0) break;
   }
 
   return { projects, scannedTasks };
@@ -1244,6 +1365,105 @@ function mapProjectOption(project: {
     id: project.id,
     name: project.displayName?.trim() || project.databaseId || "Projekt",
   };
+}
+
+const LIST_TASK_STATUSES = `
+  query DriveTaskStatuses {
+    taskStatuses {
+      id
+      name
+      category
+      rank
+    }
+  }
+`;
+
+const LIST_ACTIVE_USERS = `
+  query DriveActiveUsers {
+    activeUsers {
+      id
+      displayName
+    }
+  }
+`;
+
+const LIST_ACTIVE_TASK_TYPES = `
+  query DriveActiveTaskTypes {
+    dataForm(dataCollection: "Task") {
+      types {
+        key
+        displayName
+        archived
+      }
+    }
+  }
+`;
+
+function sortFilterOptionsByName(
+  options: DriveFilterOption[]
+): DriveFilterOption[] {
+  return [...options].sort((a, b) =>
+    a.name.localeCompare(b.name, "de", { sensitivity: "base" })
+  );
+}
+
+/** All configured task statuses from Consolidate (workflow order). */
+export async function listDriveTaskStatuses(): Promise<DriveFilterOption[]> {
+  const data = await consolidateGraphql<{
+    taskStatuses: Array<{
+      id: string;
+      name: string;
+      category: string;
+      rank: string;
+    }>;
+  }>(LIST_TASK_STATUSES);
+
+  return [...(data.taskStatuses ?? [])]
+    .sort((a, b) => a.rank.localeCompare(b.rank) || a.name.localeCompare(b.name, "de"))
+    .map((status) => ({
+      // Documents expose status by name — keep filter ids aligned.
+      id: status.name,
+      name: status.name,
+    }));
+}
+
+/** All active Consolidate users for the Ersteller filter. */
+export async function listDriveCreators(): Promise<DriveFilterOption[]> {
+  const data = await consolidateGraphql<{
+    activeUsers: Array<{
+      id: string;
+      displayName?: string | null;
+    }>;
+  }>(LIST_ACTIVE_USERS);
+
+  return sortFilterOptionsByName(
+    (data.activeUsers ?? []).map((user) => ({
+      id: user.id,
+      name: user.displayName?.trim() || "Benutzer",
+    }))
+  );
+}
+
+/** All non-archived Task data-types for the Task-Typ filter. */
+export async function listDriveTaskTypes(): Promise<DriveFilterOption[]> {
+  const data = await consolidateGraphql<{
+    dataForm: {
+      types: Array<{
+        key: string;
+        displayName?: string | null;
+        archived?: boolean | null;
+      }>;
+    } | null;
+  }>(LIST_ACTIVE_TASK_TYPES);
+
+  return sortFilterOptionsByName(
+    (data.dataForm?.types ?? [])
+      .filter((type) => type.key && !type.archived)
+      .map((type) => ({
+        id: type.key,
+        name: type.displayName?.trim() || type.key,
+      }))
+  );
 }
 
 /** Search Consolidate projects for the Projekt filter dropdown. */

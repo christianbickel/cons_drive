@@ -11,28 +11,35 @@ export function formatFileSize(bytes: number): string {
   return `${value.toFixed(digits)} ${units[unit]}`;
 }
 
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+/** Calendar date as dd/mm/yyyy. */
 export function formatDriveDate(value?: string): string {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("de-DE", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(date);
+  return `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}/${date.getFullYear()}`;
+}
+
+/**
+ * Format an ISO date-only string (`yyyy-mm-dd`) as dd/mm/yyyy without timezone shift.
+ */
+export function formatIsoDateOnly(value?: string): string {
+  if (!value) return "—";
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!match) return formatDriveDate(value);
+  return `${match[3]}/${match[2]}/${match[1]}`;
 }
 
 function startOfLocalDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-function pad2(value: number): string {
-  return String(value).padStart(2, "0");
-}
-
 /**
  * Compact relative moment for hover:
- * Heute, 9 Uhr · Gestern 14:35 · 23.10. · 16.8.2024
+ * Heute, 9 Uhr · Gestern 14:35 · 23/10/2026
  */
 export function formatRelativeMoment(
   value?: string,
@@ -58,10 +65,5 @@ export function formatRelativeMoment(
     return `Gestern ${hours}:${pad2(minutes)}`;
   }
 
-  const dayNum = date.getDate();
-  const monthNum = date.getMonth() + 1;
-  if (date.getFullYear() === now.getFullYear()) {
-    return `${dayNum}.${monthNum}.`;
-  }
-  return `${dayNum}.${monthNum}.${date.getFullYear()}`;
+  return formatDriveDate(value);
 }

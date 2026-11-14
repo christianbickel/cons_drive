@@ -32,6 +32,7 @@ import {
   DRIVE_SEARCH_SCOPE_OPTIONS,
   drivePath,
   isModifiedFilterActive,
+  isMoreFilterActive,
   isOriginFilterActive,
   modifiedPresetLabel,
   requiresTaskOnlyOrigin,
@@ -40,10 +41,13 @@ import type {
   DriveCompanyFilter,
   DriveCompanyOption,
   DriveFileTypeFilter,
+  DriveFilterOption,
   DriveGroupBy,
   DriveModifiedFilter,
   DriveModifiedPreset,
+  DriveMoreFilters,
   DriveOriginFilter,
+  DrivePlace,
   DriveProjectFilter,
   DriveProjectOption,
   DriveSearchScope,
@@ -52,6 +56,8 @@ import type {
 } from "@/lib/drive/types";
 import { cn } from "@/lib/utils";
 import { DriveCompanyFilter as CompanyFilterControl } from "./drive-company-filter";
+import { formatIsoDateOnly } from "./format";
+import { DriveMoreFilter } from "./drive-more-filter";
 import { DriveProjectFilterControl } from "./drive-project-filter";
 import { useDriveNavigation } from "./drive-navigation";
 
@@ -115,6 +121,16 @@ function FilterPill({
   );
 }
 
+function moreFiltersEqual(a: DriveMoreFilters, b: DriveMoreFilters): boolean {
+  const same = (left: string[], right: string[]) =>
+    left.length === right.length && left.every((id) => right.includes(id));
+  return (
+    same(a.status, b.status) &&
+    same(a.creator, b.creator) &&
+    same(a.taskType, b.taskType)
+  );
+}
+
 export function DriveSearchField({
   groupBy,
   sortBy,
@@ -123,6 +139,9 @@ export function DriveSearchField({
   selectedProjects,
   companies,
   selectedCompanies,
+  place,
+  more,
+  moreOptions,
   origin,
   recentProjects,
   modified,
@@ -139,6 +158,13 @@ export function DriveSearchField({
   selectedProjects: DriveProjectOption[];
   companies: DriveCompanyFilter;
   selectedCompanies: DriveCompanyOption[];
+  place: DrivePlace;
+  more: DriveMoreFilters;
+  moreOptions: {
+    statuses: DriveFilterOption[];
+    creators: DriveFilterOption[];
+    taskTypes: DriveFilterOption[];
+  };
   origin: DriveOriginFilter;
   recentProjects: DriveProjectOption[];
   modified: DriveModifiedFilter;
@@ -157,6 +183,7 @@ export function DriveSearchField({
   const [selectedCompanyOptions, setSelectedCompanyOptions] =
     useState(selectedCompanies);
   const [selectedCompaniesIds, setSelectedCompaniesIds] = useState(companies);
+  const [selectedMore, setSelectedMore] = useState(more);
   const [selectedOrigin, setSelectedOrigin] = useState(origin);
   const [selectedModified, setSelectedModified] = useState(modified);
   const [selectedScope, setSelectedScope] = useState(searchScope);
@@ -171,6 +198,8 @@ export function DriveSearchField({
     fileType: selectedFileType,
     project: selectedProjectIds,
     companies: selectedCompaniesIds,
+    place,
+    more: selectedMore,
     origin: selectedOrigin,
     modified: selectedModified,
     searchScope: selectedScope,
@@ -185,6 +214,8 @@ export function DriveSearchField({
     fileType: selectedFileType,
     project: selectedProjectIds,
     companies: selectedCompaniesIds,
+    place,
+    more: selectedMore,
     origin: selectedOrigin,
     modified: selectedModified,
     searchScope: selectedScope,
@@ -212,6 +243,10 @@ export function DriveSearchField({
   }, [companies, selectedCompanies]);
 
   useEffect(() => {
+    setSelectedMore(more);
+  }, [more]);
+
+  useEffect(() => {
     setSelectedOrigin(origin);
   }, [origin]);
 
@@ -235,10 +270,12 @@ export function DriveSearchField({
     const companiesSynced =
       companies.length === selectedCompaniesIds.length &&
       companies.every((id) => selectedCompaniesIds.includes(id));
+    const moreSynced = moreFiltersEqual(more, selectedMore);
     const filtersSynced =
       fileType === selectedFileType &&
       projectsSynced &&
       companiesSynced &&
+      moreSynced &&
       origin === selectedOrigin &&
       searchScope === selectedScope &&
       modified.preset === selectedModified.preset &&
@@ -252,12 +289,14 @@ export function DriveSearchField({
     fileType,
     project,
     companies,
+    more,
     origin,
     searchScope,
     modified,
     selectedFileType,
     selectedProjectIds,
     selectedCompaniesIds,
+    selectedMore,
     selectedOrigin,
     selectedScope,
     selectedModified,
@@ -307,6 +346,8 @@ export function DriveSearchField({
           type: options.fileType,
           project: options.project,
           companies: options.companies,
+          place: options.place,
+          more: options.more,
           origin: options.origin,
           modified: options.modified,
           scope: options.searchScope,
@@ -327,6 +368,7 @@ export function DriveSearchField({
     type?: DriveFileTypeFilter;
     project?: DriveProjectOption[];
     companies?: DriveCompanyOption[];
+    more?: DriveMoreFilters;
     origin?: DriveOriginFilter;
     modified?: DriveModifiedFilter;
     scope?: DriveSearchScope;
@@ -337,9 +379,14 @@ export function DriveSearchField({
     const nextProjects = nextProjectOptions.map((option) => option.id);
     const nextCompanyOptions = next.companies ?? selectedCompanyOptions;
     const nextCompanies = nextCompanyOptions.map((option) => option.id);
+    const nextMore = next.more ?? selectedMore;
     const nextModified = next.modified ?? selectedModified;
     const nextScope = next.scope ?? selectedScope;
-    const originLocked = requiresTaskOnlyOrigin(nextProjects, groupBy);
+    const originLocked = requiresTaskOnlyOrigin(
+      nextProjects,
+      groupBy,
+      nextMore
+    );
     const nextOrigin = originLocked
       ? "task"
       : (next.origin ?? selectedOrigin);
@@ -354,6 +401,7 @@ export function DriveSearchField({
       setSelectedCompanyOptions(next.companies);
       setSelectedCompaniesIds(nextCompanies);
     }
+    if (next.more !== undefined) setSelectedMore(next.more);
     setSelectedOrigin(nextOrigin);
     if (next.modified !== undefined) setSelectedModified(next.modified);
     if (next.scope !== undefined) setSelectedScope(next.scope);
@@ -370,6 +418,8 @@ export function DriveSearchField({
         type: nextType,
         project: nextProjects,
         companies: nextCompanies,
+        place,
+        more: nextMore,
         origin: nextOrigin,
         modified: nextModified,
         scope: nextScope,
@@ -402,8 +452,10 @@ export function DriveSearchField({
   const modifiedActive = isModifiedFilterActive(selectedModified);
   const modifiedLabel = modifiedActive
     ? selectedModified.preset === "custom"
-      ? [selectedModified.from, selectedModified.to].filter(Boolean).join(" – ") ||
-        "Benutzerdefinierter Zeitraum"
+      ? [selectedModified.from, selectedModified.to]
+          .filter(Boolean)
+          .map((value) => formatIsoDateOnly(value))
+          .join(" – ") || "Benutzerdefinierter Zeitraum"
       : modifiedPresetLabel(selectedModified.preset)
     : "Geändert";
 
@@ -411,13 +463,20 @@ export function DriveSearchField({
     DRIVE_FILE_TYPE_OPTIONS.find((option) => option.value === selectedFileType)
       ?.label ?? "Typ";
 
-  const originLocked = requiresTaskOnlyOrigin(selectedProjectIds, groupBy);
+  const originLocked = requiresTaskOnlyOrigin(
+    selectedProjectIds,
+    groupBy,
+    selectedMore
+  );
   const effectiveOrigin = originLocked ? "task" : selectedOrigin;
   const originActive = isOriginFilterActive(effectiveOrigin);
   const originLabel = originActive
     ? DRIVE_ORIGIN_OPTIONS.find((option) => option.value === effectiveOrigin)
         ?.label ?? "Quelle"
     : "Quelle";
+  const moreLockedHint = isMoreFilterActive(selectedMore)
+    ? "Bei Status-, Ersteller- oder Task-Typ-Filter nur Tasks"
+    : undefined;
 
   return (
     <div className={cn("mx-auto w-full space-y-3", className)}>
@@ -615,15 +674,16 @@ export function DriveSearchField({
             aria-label="Nach Quelle filtern"
             title={
               originLocked
-                ? "Bei Projektfilter oder Gruppierung nur Tasks"
+                ? moreLockedHint ??
+                  "Bei Projektfilter oder Gruppierung nur Tasks"
                 : undefined
             }
           />
           <DropdownMenuContent align="start" className="min-w-56">
             {originLocked ? (
               <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                Bei Projektfilter oder Gruppierung sind nur Task-Dokumente
-                verfügbar.
+                Bei Projekt-, Mehr-Filter oder Gruppierung sind nur
+                Task-Dokumente verfügbar.
               </p>
             ) : null}
             {DRIVE_ORIGIN_OPTIONS.map((option) => (
@@ -640,6 +700,14 @@ export function DriveSearchField({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <DriveMoreFilter
+          more={selectedMore}
+          statuses={moreOptions.statuses}
+          creators={moreOptions.creators}
+          taskTypes={moreOptions.taskTypes}
+          onChange={(next) => navigate({ more: next })}
+        />
       </div>
     </div>
   );

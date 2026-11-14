@@ -10,21 +10,17 @@ export function consolidateEntryUrl(apiUrl: string, entryId: string): string {
 
 /**
  * Open an E-Mail conversation in the Consolidate mail UI.
- * Prefers folder context when available; otherwise uses the shared/detail route
- * which loads via `emailConversation(id:)`.
+ * Always uses `/emails/shared/:conversationId` (loads via `emailConversation(id:)`).
  */
 export function consolidateMailConversationUrl(
   apiUrl: string,
   conversationId: string,
-  options?: {
+  _options?: {
     folderId?: string;
     folderConversationId?: string;
   }
 ): string {
   const origin = consolidateAppOrigin(apiUrl);
-  if (options?.folderId && options?.folderConversationId) {
-    return `${origin}/emails/folder/${encodeURIComponent(options.folderId)}/${encodeURIComponent(options.folderConversationId)}`;
-  }
   return `${origin}/emails/shared/${encodeURIComponent(conversationId)}`;
 }
 

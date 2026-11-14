@@ -8,22 +8,32 @@ import {
   getDriveCompaniesByIds,
   getDriveProjectsByIds,
   listDriveDocuments,
+  listDriveCreators,
+  listDriveTaskStatuses,
+  listDriveTaskTypes,
   listRecentDriveProjects,
   listSuggestedDriveDocuments,
   searchDriveDocumentsFulltext,
 } from "@/lib/consolidate/drive-repository";
-import { ConsolidateApiError } from "@/lib/consolidate/errors";
+import {
+  ConsolidateApiError,
+  summarizeConsolidateError,
+} from "@/lib/consolidate/errors";
 import {
   drivePath,
   isCompanyFilterActive,
+  isMinePlace,
   isModifiedFilterActive,
+  isMoreFilterActive,
   isOriginFilterActive,
   isProjectFilterActive,
   parseDriveCompanyFilter,
   parseDriveFileType,
   parseDriveGroupBy,
   parseDriveModifiedFilter,
+  parseDriveMoreFilters,
   parseDriveOriginFilter,
+  parseDrivePlace,
   parseDriveProjectFilter,
   parseDriveSearchScope,
   parseDriveSortBy,
@@ -44,6 +54,10 @@ async function DriveContent({
     type?: string;
     project?: string | string[];
     company?: string | string[];
+    place?: string;
+    status?: string | string[];
+    creator?: string | string[];
+    taskType?: string | string[];
     origin?: string;
     modified?: string;
     from?: string;
@@ -63,8 +77,20 @@ async function DriveContent({
   const fileType = parseDriveFileType(params.type);
   const project = parseDriveProjectFilter(params.project);
   const companies = parseDriveCompanyFilter(params.company);
+  const place = parseDrivePlace(params.place);
+  const responsible = isMinePlace(place) ? [session.user.id] : [];
+  const more = parseDriveMoreFilters({
+    status: params.status,
+    creator: params.creator,
+    taskType: params.taskType,
+  });
   const requestedOrigin = parseDriveOriginFilter(params.origin);
-  const origin = resolveDriveOriginFilter(requestedOrigin, project, groupBy);
+  const origin = resolveDriveOriginFilter(
+    requestedOrigin,
+    project,
+    groupBy,
+    more
+  );
   const searchScope = parseDriveSearchScope(params.scope);
   const viewMode = parseDriveViewMode(params.view);
   const modified = parseDriveModifiedFilter({
@@ -88,6 +114,8 @@ async function DriveContent({
         type: fileType,
         project,
         companies,
+        place,
+        more,
         origin,
         modified,
         scope: searchScope,
@@ -96,11 +124,14 @@ async function DriveContent({
     );
   }
 
+  // Unternehmen and Meine Ablage both use suggestions when no extra filters
+  // are set; Meine Ablage still applies responsible (+ mailbox) scoping below.
   const suggested =
     !query &&
     fileType === "all" &&
     !isProjectFilterActive(project) &&
     !isCompanyFilterActive(companies) &&
+    !isMoreFilterActive(more) &&
     !isOriginFilterActive(origin) &&
     !isModifiedFilterActive(modified);
   // E-Mails have no project — skip mailbox when origin is task-only.
@@ -111,6 +142,9 @@ async function DriveContent({
   let recentProjects;
   let selectedProjects;
   let selectedCompanies;
+  let taskStatuses;
+  let creators;
+  let taskTypes;
   let truncated = false;
   try {
     const recentProjectsPromise = listRecentDriveProjects({
@@ -119,57 +153,89 @@ async function DriveContent({
     });
     const selectedProjectsPromise = getDriveProjectsByIds(project);
     const companiesPromise = getDriveCompaniesByIds(companies);
+    const moreOptionsPromise = Promise.all([
+      listDriveTaskStatuses(),
+      listDriveCreators(),
+      listDriveTaskTypes(),
+    ]);
 
     if (suggested) {
-      const [result, recentResult, selectedResult, companiesResult] =
-        await Promise.all([
-          listSuggestedDriveDocuments({
-            userId: session.user.id,
-            limit: 20,
-          }),
-          recentProjectsPromise,
-          selectedProjectsPromise,
-          companiesPromise,
-        ]);
+      const [
+        result,
+        recentResult,
+        selectedResult,
+        companiesResult,
+        [statusesResult, creatorsResult, taskTypesResult],
+      ] = await Promise.all([
+        listSuggestedDriveDocuments({
+          userId: session.user.id,
+          limit: 20,
+        }),
+        recentProjectsPromise,
+        selectedProjectsPromise,
+        companiesPromise,
+        moreOptionsPromise,
+      ]);
       allDocuments = result.documents;
       recentProjects = recentResult.projects;
       selectedProjects = selectedResult;
       selectedCompanies = companiesResult;
+      taskStatuses = statusesResult;
+      creators = creatorsResult;
+      taskTypes = taskTypesResult;
     } else if (query && searchScope === "fulltext") {
-      const [result, recentResult, selectedResult, companiesResult] =
-        await Promise.all([
-          searchDriveDocumentsFulltext({
-            searchString: query,
-            includeEmails,
-            includeTasks,
-          }),
-          recentProjectsPromise,
-          selectedProjectsPromise,
-          companiesPromise,
-        ]);
+      const [
+        result,
+        recentResult,
+        selectedResult,
+        companiesResult,
+        [statusesResult, creatorsResult, taskTypesResult],
+      ] = await Promise.all([
+        searchDriveDocumentsFulltext({
+          searchString: query,
+          includeEmails,
+          includeTasks,
+        }),
+        recentProjectsPromise,
+        selectedProjectsPromise,
+        companiesPromise,
+        moreOptionsPromise,
+      ]);
       allDocuments = result.documents;
       truncated = result.truncated;
       recentProjects = recentResult.projects;
       selectedProjects = selectedResult;
       selectedCompanies = companiesResult;
+      taskStatuses = statusesResult;
+      creators = creatorsResult;
+      taskTypes = taskTypesResult;
     } else {
-      const [result, recentResult, selectedResult, companiesResult] =
-        await Promise.all([
-          listDriveDocuments({ includeEmails, includeTasks }),
-          recentProjectsPromise,
-          selectedProjectsPromise,
-          companiesPromise,
-        ]);
+      const [
+        result,
+        recentResult,
+        selectedResult,
+        companiesResult,
+        [statusesResult, creatorsResult, taskTypesResult],
+      ] = await Promise.all([
+        listDriveDocuments({ includeEmails, includeTasks }),
+        recentProjectsPromise,
+        selectedProjectsPromise,
+        companiesPromise,
+        moreOptionsPromise,
+      ]);
       allDocuments = result.documents;
       truncated = result.truncated;
       recentProjects = recentResult.projects;
       selectedProjects = selectedResult;
       selectedCompanies = companiesResult;
+      taskStatuses = statusesResult;
+      creators = creatorsResult;
+      taskTypes = taskTypesResult;
     }
   } catch (error) {
     const message =
       error instanceof ConsolidateApiError
-        ? error.message
+        ? summarizeConsolidateError(error)
         : "Dokumente konnten nicht geladen werden.";
     return (
       <div className="flex h-full min-h-0 flex-1 flex-col items-center justify-center gap-4 bg-[#f8f9fa] px-4">
@@ -188,6 +254,11 @@ async function DriveContent({
     );
   }
 
+  const moreOptions = {
+    statuses: taskStatuses ?? [],
+    creators: creators ?? [],
+    taskTypes: taskTypes ?? [],
+  };
   const paged = prepareDriveDocumentPage(allDocuments, {
     query,
     searchScope,
@@ -195,6 +266,8 @@ async function DriveContent({
     fileType,
     project,
     companies,
+    responsible,
+    more,
     origin,
     modified,
     sortBy: suggested ? "modified" : sortBy,
@@ -209,6 +282,8 @@ async function DriveContent({
       recentProjects={recentProjects}
       selectedProjects={selectedProjects ?? []}
       selectedCompanies={selectedCompanies ?? []}
+      more={more}
+      moreOptions={moreOptions}
       groupBy={suggested ? [] : groupBy}
       sortBy={suggested ? "modified" : sortBy}
       page={paged.page}
@@ -217,6 +292,7 @@ async function DriveContent({
       fileType={fileType}
       project={project}
       companies={companies}
+      place={place}
       origin={origin}
       modified={modified}
       searchScope={searchScope}
@@ -240,6 +316,10 @@ export default function DrivePage({
     type?: string;
     project?: string | string[];
     company?: string | string[];
+    place?: string;
+    status?: string | string[];
+    creator?: string | string[];
+    taskType?: string | string[];
     origin?: string;
     modified?: string;
     from?: string;

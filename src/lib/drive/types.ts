@@ -34,6 +34,34 @@ export interface DriveCompanyOption {
 /** Selected Consolidate company ids; empty = no company restriction. */
 export type DriveCompanyFilter = string[];
 
+/** Selected responsible user ids; empty = no responsible restriction. */
+export type DriveResponsibleFilter = string[];
+
+/** Sidebar place: home = Unternehmen, mine = Meine Ablage. */
+export type DrivePlace = "home" | "mine";
+
+/** Named option for Mehr-filter multi-selects. */
+export interface DriveFilterOption {
+  id: string;
+  name: string;
+}
+
+/** Task status names; empty = no status restriction. */
+export type DriveStatusFilter = string[];
+
+/** Attachment creator user ids; empty = no creator restriction. */
+export type DriveCreatorFilter = string[];
+
+/** Task type keys; empty = no task-type restriction. */
+export type DriveTaskTypeFilter = string[];
+
+/** Extra task-only filters under the „Mehr…“ dropdown. */
+export interface DriveMoreFilters {
+  status: DriveStatusFilter;
+  creator: DriveCreatorFilter;
+  taskType: DriveTaskTypeFilter;
+}
+
 /** Document origin: Task attachments, E-Mail attachments, or both. */
 export type DriveOriginFilter = "all" | "email" | "task";
 
@@ -116,6 +144,11 @@ export interface DriveDocument {
     name: string;
   }>;
   responsible?: {
+    id: string;
+    name: string;
+  };
+  /** User who created the attachment. */
+  createdBy?: {
     id: string;
     name: string;
   };

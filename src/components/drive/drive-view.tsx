@@ -8,9 +8,12 @@ import type {
   DriveCompanyOption,
   DriveDocument,
   DriveFileTypeFilter,
+  DriveFilterOption,
   DriveGroupBy,
   DriveModifiedFilter,
+  DriveMoreFilters,
   DriveOriginFilter,
+  DrivePlace,
   DriveProjectFilter,
   DriveProjectOption,
   DriveSearchScope,
@@ -35,6 +38,8 @@ function DriveViewContent({
   recentProjects,
   selectedProjects,
   selectedCompanies,
+  more,
+  moreOptions,
   groupBy,
   sortBy,
   page,
@@ -43,6 +48,7 @@ function DriveViewContent({
   fileType,
   project,
   companies,
+  place,
   origin,
   modified,
   searchScope,
@@ -56,6 +62,12 @@ function DriveViewContent({
   recentProjects: DriveProjectOption[];
   selectedProjects: DriveProjectOption[];
   selectedCompanies: DriveCompanyOption[];
+  more: DriveMoreFilters;
+  moreOptions: {
+    statuses: DriveFilterOption[];
+    creators: DriveFilterOption[];
+    taskTypes: DriveFilterOption[];
+  };
   groupBy: DriveGroupBy;
   sortBy: DriveSortBy;
   page: number;
@@ -64,6 +76,7 @@ function DriveViewContent({
   fileType: DriveFileTypeFilter;
   project: DriveProjectFilter;
   companies: DriveCompanyFilter;
+  place: DrivePlace;
   origin: DriveOriginFilter;
   modified: DriveModifiedFilter;
   searchScope: DriveSearchScope;
@@ -120,6 +133,8 @@ function DriveViewContent({
         fileType={fileType}
         project={project}
         companies={companies}
+        place={place}
+        more={more}
         origin={origin}
         modified={modified}
         searchScope={searchScope}
@@ -161,6 +176,8 @@ function DriveViewContent({
             fileType={fileType}
             project={project}
             companies={companies}
+            place={place}
+            more={more}
             origin={origin}
             modified={modified}
             searchScope={searchScope}
@@ -182,6 +199,9 @@ function DriveViewContent({
               selectedProjects={selectedProjects}
               companies={companies}
               selectedCompanies={selectedCompanies}
+              place={place}
+              more={more}
+              moreOptions={moreOptions}
               origin={origin}
               recentProjects={recentProjects}
               modified={modified}
@@ -209,6 +229,8 @@ function DriveViewContent({
                 fileType={fileType}
                 project={project}
                 companies={companies}
+                place={place}
+                more={more}
                 origin={origin}
                 modified={modified}
                 searchScope={searchScope}
@@ -233,6 +255,8 @@ function DriveViewContent({
                   fileType={fileType}
                   project={project}
                   companies={companies}
+                  place={place}
+                  more={more}
                   origin={origin}
                   modified={modified}
                   searchScope={searchScope}
