@@ -13,6 +13,7 @@ import {
   Files,
   Layers2,
   Search,
+  UserRound,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -31,6 +32,7 @@ import {
   DRIVE_ORIGIN_OPTIONS,
   DRIVE_SEARCH_SCOPE_OPTIONS,
   drivePath,
+  isMinePlace,
   isModifiedFilterActive,
   isMoreFilterActive,
   isOriginFilterActive,
@@ -187,6 +189,7 @@ export function DriveSearchField({
   const [selectedOrigin, setSelectedOrigin] = useState(origin);
   const [selectedModified, setSelectedModified] = useState(modified);
   const [selectedScope, setSelectedScope] = useState(searchScope);
+  const [selectedPlace, setSelectedPlace] = useState(place);
   const [customFrom, setCustomFrom] = useState(modified.from ?? "");
   const [customTo, setCustomTo] = useState(modified.to ?? "");
   const debounceRef = useRef<number | null>(null);
@@ -198,7 +201,7 @@ export function DriveSearchField({
     fileType: selectedFileType,
     project: selectedProjectIds,
     companies: selectedCompaniesIds,
-    place,
+    place: selectedPlace,
     more: selectedMore,
     origin: selectedOrigin,
     modified: selectedModified,
@@ -214,7 +217,7 @@ export function DriveSearchField({
     fileType: selectedFileType,
     project: selectedProjectIds,
     companies: selectedCompaniesIds,
-    place,
+    place: selectedPlace,
     more: selectedMore,
     origin: selectedOrigin,
     modified: selectedModified,
@@ -260,6 +263,10 @@ export function DriveSearchField({
     setSelectedScope(searchScope);
   }, [searchScope]);
 
+  useEffect(() => {
+    setSelectedPlace(place);
+  }, [place]);
+
   // Clear loading once URL/server props match the optimistic UI
   // (covers filter-only changes where `query` stays the same).
   useEffect(() => {
@@ -278,6 +285,7 @@ export function DriveSearchField({
       moreSynced &&
       origin === selectedOrigin &&
       searchScope === selectedScope &&
+      place === selectedPlace &&
       modified.preset === selectedModified.preset &&
       (modified.from ?? "") === (selectedModified.from ?? "") &&
       (modified.to ?? "") === (selectedModified.to ?? "") &&
@@ -292,6 +300,7 @@ export function DriveSearchField({
     more,
     origin,
     searchScope,
+    place,
     modified,
     selectedFileType,
     selectedProjectIds,
@@ -299,6 +308,7 @@ export function DriveSearchField({
     selectedMore,
     selectedOrigin,
     selectedScope,
+    selectedPlace,
     selectedModified,
     value,
     query,
@@ -372,6 +382,7 @@ export function DriveSearchField({
     origin?: DriveOriginFilter;
     modified?: DriveModifiedFilter;
     scope?: DriveSearchScope;
+    place?: DrivePlace;
   }) {
     clearDebounce();
     const nextType = next.type ?? selectedFileType;
@@ -382,6 +393,7 @@ export function DriveSearchField({
     const nextMore = next.more ?? selectedMore;
     const nextModified = next.modified ?? selectedModified;
     const nextScope = next.scope ?? selectedScope;
+    const nextPlace = next.place ?? selectedPlace;
     const originLocked = requiresTaskOnlyOrigin(
       nextProjects,
       groupBy,
@@ -405,6 +417,7 @@ export function DriveSearchField({
     setSelectedOrigin(nextOrigin);
     if (next.modified !== undefined) setSelectedModified(next.modified);
     if (next.scope !== undefined) setSelectedScope(next.scope);
+    if (next.place !== undefined) setSelectedPlace(next.place);
 
     // Route transition owns the loading state from here.
     setSearchPending(false);
@@ -418,7 +431,7 @@ export function DriveSearchField({
         type: nextType,
         project: nextProjects,
         companies: nextCompanies,
-        place,
+        place: nextPlace,
         more: nextMore,
         origin: nextOrigin,
         modified: nextModified,
@@ -708,6 +721,26 @@ export function DriveSearchField({
           taskTypes={moreOptions.taskTypes}
           onChange={(next) => navigate({ more: next })}
         />
+
+        <button
+          type="button"
+          aria-pressed={isMinePlace(selectedPlace)}
+          title="Nur Dokumente, für die du verantwortlich bist, sowie deine E-Mails"
+          onClick={() =>
+            navigate({
+              place: isMinePlace(selectedPlace) ? "home" : "mine",
+            })
+          }
+          className={cn(
+            pillClassName,
+            isMinePlace(selectedPlace) && "bg-[#c2e7ff] hover:bg-[#a8daff]"
+          )}
+        >
+          <UserRound className="size-4 shrink-0 opacity-80" aria-hidden />
+          <span className="min-w-0 max-w-[10rem] truncate sm:max-w-[14rem]">
+            Nur eigene Dokumente
+          </span>
+        </button>
       </div>
     </div>
   );

@@ -37,6 +37,16 @@ export const DRIVE_GROUP_FIELD_OPTIONS: Array<{
   { value: "taskType", label: "Task-Typ" },
 ];
 
+export const DRIVE_SORT_OPTIONS: Array<{
+  value: DriveSortBy;
+  label: string;
+}> = [
+  { value: "created", label: "Zuletzt erstellt" },
+  { value: "modified", label: "Zuletzt geändert" },
+  { value: "name", label: "Name" },
+  { value: "size", label: "Größe" },
+];
+
 const PREVIEW_TYPES: DrivePreviewType[] = [
   "Pdf",
   "Office",

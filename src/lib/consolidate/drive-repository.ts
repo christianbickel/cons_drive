@@ -137,7 +137,7 @@ const ATTACHMENT_SELECTION = `
 /** Consolidate "Relations" — companies linked to Task / E-Mail. */
 const ASSOCIATION_COMPANY_SELECTION = `
   associations {
-    items {
+      items {
       entity {
         __typename
         ... on Company { id displayName }
@@ -182,17 +182,17 @@ function driveAttachmentProxyUrls(attachment: AttachmentNode): {
 }
 
 const TASK_SELECTION = `
-  id
-  displayName
-  attachmentsCount
-  dataTypes { key displayName color }
-  values {
-    subject
-    status { name category }
-    responsible { id displayName }
-    project { id displayName databaseId }
-  }
-  attachments {
+        id
+        displayName
+        attachmentsCount
+        dataTypes { key displayName color }
+        values {
+          subject
+          status { name category }
+          responsible { id displayName }
+          project { id displayName databaseId }
+        }
+        attachments {
     ${ATTACHMENT_SELECTION}
   }
   ${ASSOCIATION_COMPANY_SELECTION}
@@ -203,7 +203,7 @@ const EMAIL_CONVERSATION_SELECTION = `
   subject
   attachmentsCount
   date
-  lastModified
+          lastModified
   emails {
     id
     hasAttachments
